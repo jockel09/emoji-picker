@@ -29,7 +29,7 @@ The install script handles all dependencies automatically.
 ## Installation
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/emoji-picker.git
+git clone https://github.com/jockel09/emoji-picker.git
 cd emoji-picker
 chmod +x install.sh
 ./install.sh
