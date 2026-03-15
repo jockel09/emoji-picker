@@ -14,6 +14,9 @@ Built because the default KDE emoji picker can't directly insert emojis under Wa
 - ✅ **Favorites** — right-click any emoji to add/remove as favorite
 - ✅ **Recently used** — automatically tracked
 - ✅ **Search** — with German and English terms (e.g. "auto", "car", "lachen", "laugh")
+- ✅ **Skin tone selector** — 6 Fitzpatrick tones, applied to all compatible emojis
+- ✅ **Gender selector** — neutral / ♂ / ♀, combinable with skin tone
+- ✅ **Localization** — English and German included, easily extensible
 - ✅ **Color emojis** — rendered via Cairo/Pango (not Qt's broken text rendering)
 - ✅ **Dark theme** — matches KDE Breeze Dark
 - ✅ **Focus-loss close** — click outside to dismiss
@@ -22,7 +25,7 @@ Built because the default KDE emoji picker can't directly insert emojis under Wa
 ## Requirements
 
 - **Debian 13 (Trixie)** / KDE Plasma 6 / Wayland
-- Should also work on other Debian-based distros with Wayland + KDE
+- Should also work on other Debian/Ubuntu-based or Fedora-based distros with Wayland + KDE
 
 The install script handles all dependencies automatically.
 
@@ -83,13 +86,19 @@ Settings are stored in `~/.config/emoji-picker/config.json`:
 ```json
 {
   "favorites": ["😂", "❤️", "👍"],
-  "recent": ["😀", "🎉"],
   "max_recent": 36,
   "columns": 9,
   "close_on_select": true,
-  "insert_method": "ydotool"
+  "insert_method": "ydotool",
+  "skin_tone": "",
+  "gender": "",
+  "language": "en"
 }
 ```
+
+Recently used emojis are stored separately in `~/.local/share/emoji-picker/recent.json` so dotfile managers (chezmoi, stow) can ignore it independently of the config.
+
+To use German, set `"language": "de"`. Custom languages can be added by creating a new file in the `locales/` directory.
 
 ## Uninstall
 
