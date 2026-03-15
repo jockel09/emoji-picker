@@ -538,3 +538,23 @@ SKIN_TONE_EMOJIS = {
     # Couples & pairs (single modifier applies to all persons)
     "🤝", "👫", "👬", "👭", "💏", "💑",
 }
+
+# Emojis that support gender ZWJ sequences (+ ZWJ + ♂/♀ + FE0F)
+GENDER_EMOJIS = {
+    # Gesturing & expressions
+    "🙍", "🙎", "🙅", "🙆", "💁", "🙋", "🧏", "🤦", "🤷",
+    # Body care
+    "💆", "💇",
+    # Movement
+    "🚶", "🧍", "🧎", "🏃", "🕴️",
+    # Dance (💃/🕺 are already gendered, but 🧑 variants exist)
+    # Activities & sports
+    "🧖", "🧗", "🤺", "🏋️", "🤸", "🤽", "🤾", "🤹", "🧘",
+    "⛷️", "🏂", "🏇",
+    # Professions
+    "👮", "🕵️", "💂", "👷", "🤵", "👰",
+    # Fantasy
+    "🦸", "🦹", "🧙", "🧚", "🧛", "🧜", "🧝", "🧞", "🧟",
+    # Generic person variants
+    "🧑", "👱", "🧔",
+}

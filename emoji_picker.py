@@ -24,8 +24,29 @@ gi.require_version('Pango', '1.0')
 gi.require_version('PangoCairo', '1.0')
 from gi.repository import Pango, PangoCairo
 
-from emoji_data import EMOJI_CATEGORIES, ALL_EMOJIS, SKIN_TONE_EMOJIS
+from emoji_data import EMOJI_CATEGORIES, ALL_EMOJIS, SKIN_TONE_EMOJIS, GENDER_EMOJIS
 from search_tags import SEARCH_TAGS
+
+LOCALE_DIR = Path(__file__).resolve().parent / "locales"
+
+
+def load_locale(language="en"):
+    locale_file = LOCALE_DIR / f"{language}.json"
+    if not locale_file.exists():
+        locale_file = LOCALE_DIR / "en.json"
+    try:
+        with open(locale_file, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return {}
+
+
+def t(locale, key, **kwargs):
+    """Look up a translation key, optionally formatting with named placeholders."""
+    text = locale.get(key, key)
+    for k, v in kwargs.items():
+        text = text.replace(f"{{{k}}}", str(v))
+    return text
 
 # Cache rendered emoji pixmaps
 _emoji_pixmap_cache = {}
@@ -73,25 +94,49 @@ def render_emoji_pixmap(emoji, size=32):
 CONFIG_DIR = Path.home() / ".config" / "emoji-picker"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
+RECENT_FILE = Path.home() / ".local" / "share" / "emoji-picker" / "recent.json"
+
+
+def load_recent():
+    if RECENT_FILE.exists():
+        try:
+            with open(RECENT_FILE, "r") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            pass
+    return []
+
+
+def save_recent(recent):
+    RECENT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(RECENT_FILE, "w") as f:
+        json.dump(recent, f, ensure_ascii=False)
+
 SKIN_TONE_MODIFIERS = [
-    ("", "#FBBF24"),        # default (gelb)
-    ("\U0001F3FB", "#FDDBB4"),  # hell
-    ("\U0001F3FC", "#E8AA80"),  # mittel-hell
-    ("\U0001F3FD", "#C68642"),  # mittel
-    ("\U0001F3FE", "#8B5A2B"),  # mittel-dunkel
-    ("\U0001F3FF", "#4A2912"),  # dunkel
+    ("", "#FBBF24"),
+    ("\U0001F3FB", "#FDDBB4"),
+    ("\U0001F3FC", "#E8AA80"),
+    ("\U0001F3FD", "#C68642"),
+    ("\U0001F3FE", "#8B5A2B"),
+    ("\U0001F3FF", "#4A2912"),
 ]
 
+GENDER_MODIFIERS = [
+    ("", "○"),                      # neutral
+    ("\u200D\u2642\uFE0F", "♂"),    # male:   ZWJ + ♂ + FE0F
+    ("\u200D\u2640\uFE0F", "♀"),    # female: ZWJ + ♀ + FE0F
+]
 
 DEFAULT_CONFIG = {
     "favorites": [],
-    "recent": [],
     "max_recent": 36,
     "columns": 9,
     "emoji_size": 28,
     "close_on_select": True,
     "insert_method": "ydotool",  # "ydotool", "clipboard"
     "skin_tone": "",
+    "gender": "",
+    "language": "en",
 }
 
 
@@ -162,6 +207,42 @@ class SkinToneButton(QPushButton):
             }}
             QPushButton:hover {{
                 border: 2px solid rgba(255, 255, 255, 0.5);
+            }}
+        """)
+
+
+class GenderButton(QPushButton):
+    """A small button for gender selection."""
+    def __init__(self, gender, symbol, tooltip, parent=None):
+        super().__init__(symbol, parent)
+        self.gender = gender
+        self.setFixedSize(20, 20)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setCheckable(True)
+        self.setToolTip(tooltip)
+        self._refresh_style()
+
+    def setChecked(self, checked):
+        super().setChecked(checked)
+        self._refresh_style()
+
+    def _refresh_style(self):
+        if self.isChecked():
+            bg, border = "rgba(82, 148, 226, 0.3)", "2px solid #5294e2"
+        else:
+            bg, border = "rgba(255,255,255,0.06)", "2px solid transparent"
+        self.setStyleSheet(f"""
+            QPushButton {{
+                background: {bg};
+                border: {border};
+                border-radius: 10px;
+                color: #dbdee1;
+                font-size: 10px;
+                padding: 0px;
+            }}
+            QPushButton:hover {{
+                background: rgba(255, 255, 255, 0.12);
+                border: 2px solid rgba(255, 255, 255, 0.3);
             }}
         """)
 
@@ -280,6 +361,7 @@ class EmojiPicker(QWidget):
     def __init__(self):
         super().__init__()
         self.config = load_config()
+        self.locale = load_locale(self.config.get("language", "en"))
         self.current_category = None
         self._inserting = False
 
@@ -333,7 +415,7 @@ class EmojiPicker(QWidget):
 
         # Search bar
         self.search = QLineEdit()
-        self.search.setPlaceholderText("Emoji suchen…")
+        self.search.setPlaceholderText(t(self.locale, "search_placeholder"))
         self.search.setClearButtonEnabled(True)
         self.search.setStyleSheet("""
             QLineEdit {
@@ -357,13 +439,25 @@ class EmojiPicker(QWidget):
 
         self.skin_tone_buttons = []
         current_tone = self.config.get("skin_tone", "")
-        tooltips = ["Standard", "Hell", "Mittel-hell", "Mittel", "Mittel-dunkel", "Dunkel"]
-        for (tone, color), tooltip in zip(SKIN_TONE_MODIFIERS, tooltips):
-            btn = SkinToneButton(tone, color, tooltip)
+        skin_tooltip_keys = ["skin_default", "skin_light", "skin_medium_light", "skin_medium", "skin_medium_dark", "skin_dark"]
+        for (tone, color), key in zip(SKIN_TONE_MODIFIERS, skin_tooltip_keys):
+            btn = SkinToneButton(tone, color, t(self.locale, key))
             btn.setChecked(tone == current_tone)
-            btn.clicked.connect(lambda checked, t=tone: self.set_skin_tone(t))
+            btn.clicked.connect(lambda checked, tone=tone: self.set_skin_tone(tone))
             search_row.addWidget(btn)
             self.skin_tone_buttons.append(btn)
+
+        search_row.addSpacing(6)
+
+        self.gender_buttons = []
+        current_gender = self.config.get("gender", "")
+        gender_tooltip_keys = ["gender_neutral", "gender_male", "gender_female"]
+        for (gender, symbol), key in zip(GENDER_MODIFIERS, gender_tooltip_keys):
+            btn = GenderButton(gender, symbol, t(self.locale, key))
+            btn.setChecked(gender == current_gender)
+            btn.clicked.connect(lambda checked, gender=gender: self.set_gender(gender))
+            search_row.addWidget(btn)
+            self.gender_buttons.append(btn)
 
         layout.addLayout(search_row)
 
@@ -373,17 +467,17 @@ class EmojiPicker(QWidget):
 
         self.category_buttons = {}
         categories = [
-            ("⏱️", "recent", "Kürzlich"),
-            ("⭐", "favorites", "Favoriten"),
-            ("😀", "smileys", "Smileys"),
-            ("👋", "people", "Personen"),
-            ("🐻", "animals", "Tiere & Natur"),
-            ("🍔", "food", "Essen & Trinken"),
-            ("✈️", "travel", "Reisen & Orte"),
-            ("⚽", "activities", "Aktivitäten"),
-            ("💡", "objects", "Objekte"),
-            ("🔣", "symbols", "Symbole"),
-            ("🏁", "flags", "Flaggen"),
+            ("⏱️", "recent",     t(self.locale, "cat_recent")),
+            ("⭐", "favorites",  t(self.locale, "cat_favorites")),
+            ("😀", "smileys",    t(self.locale, "cat_smileys")),
+            ("👋", "people",     t(self.locale, "cat_people")),
+            ("🐻", "animals",    t(self.locale, "cat_animals")),
+            ("🍔", "food",       t(self.locale, "cat_food")),
+            ("✈️", "travel",     t(self.locale, "cat_travel")),
+            ("⚽", "activities", t(self.locale, "cat_activities")),
+            ("💡", "objects",    t(self.locale, "cat_objects")),
+            ("🔣", "symbols",    t(self.locale, "cat_symbols")),
+            ("🏁", "flags",      t(self.locale, "cat_flags")),
         ]
 
         for icon, key, label in categories:
@@ -463,29 +557,47 @@ class EmojiPicker(QWidget):
             y = (geo.height() - self.height()) // 2 + geo.y()
             self.move(x, y)
 
-    def _apply_skin_tone(self, emojis):
-        """Apply the configured skin tone modifier to all compatible emojis."""
+    def _apply_modifiers(self, emojis):
+        """Apply skin tone and/or gender modifiers to compatible emojis."""
         tone = self.config.get("skin_tone", "")
-        if not tone:
+        gender = self.config.get("gender", "")
+        if not tone and not gender:
             return emojis
         result = []
         for emoji, name in emojis:
-            if emoji in SKIN_TONE_EMOJIS:
-                base = emoji.replace('\uFE0F', '')
-                result.append((base + tone, name))
-            else:
+            in_skin = emoji in SKIN_TONE_EMOJIS
+            in_gender = emoji in GENDER_EMOJIS
+            if not (tone and in_skin) and not (gender and in_gender):
                 result.append((emoji, name))
+                continue
+            base = emoji.replace('\uFE0F', '')
+            modified = base
+            if tone and in_skin:
+                modified += tone
+            if gender and in_gender:
+                modified += gender
+            result.append((modified, name))
         return result
+
+    def _refresh_view(self):
+        if self._search_text:
+            self._do_search()
+        elif self.current_category:
+            self.show_category(self.current_category)
 
     def set_skin_tone(self, tone):
         self.config["skin_tone"] = tone
         save_config(self.config)
         for btn in self.skin_tone_buttons:
             btn.setChecked(btn.tone == tone)
-        if self._search_text:
-            self._do_search()
-        elif self.current_category:
-            self.show_category(self.current_category)
+        self._refresh_view()
+
+    def set_gender(self, gender):
+        self.config["gender"] = gender
+        save_config(self.config)
+        for btn in self.gender_buttons:
+            btn.setChecked(btn.gender == gender)
+        self._refresh_view()
 
     def show_category(self, category):
         self.current_category = category
@@ -496,23 +608,17 @@ class EmojiPicker(QWidget):
             btn.setChecked(key == category)
 
         if category == "recent":
-            emojis = []
-            for e in self.config.get("recent", []):
-                name = ALL_EMOJIS.get(e, "")
-                emojis.append((e, name))
-            self.emoji_grid.set_emojis(self._apply_skin_tone(emojis))
-            self.status.setText(f"{len(emojis)} kürzlich verwendet")
+            emojis = [(e, ALL_EMOJIS.get(e, "")) for e in load_recent()]
+            self.emoji_grid.set_emojis(self._apply_modifiers(emojis))
+            self.status.setText(t(self.locale, "status_recent", n=len(emojis)))
         elif category == "favorites":
-            emojis = []
-            for e in self.config.get("favorites", []):
-                name = ALL_EMOJIS.get(e, "")
-                emojis.append((e, name))
-            self.emoji_grid.set_emojis(self._apply_skin_tone(emojis))
-            self.status.setText(f"{len(emojis)} Favoriten  •  Rechtsklick zum Entfernen")
+            emojis = [(e, ALL_EMOJIS.get(e, "")) for e in self.config.get("favorites", [])]
+            self.emoji_grid.set_emojis(self._apply_modifiers(emojis))
+            self.status.setText(t(self.locale, "status_favorites", n=len(emojis)))
         else:
             emojis = EMOJI_CATEGORIES.get(category, [])
-            self.emoji_grid.set_emojis(self._apply_skin_tone(emojis))
-            self.status.setText(f"{len(emojis)} Emojis  •  Rechtsklick = Favorit")
+            self.emoji_grid.set_emojis(self._apply_modifiers(emojis))
+            self.status.setText(t(self.locale, "status_emojis", n=len(emojis)))
 
         self.scroll.verticalScrollBar().setValue(0)
 
@@ -553,19 +659,18 @@ class EmojiPicker(QWidget):
                     results.append((emoji, name))
                     seen.add(emoji)
 
-        self.emoji_grid.set_emojis(self._apply_skin_tone(results))
-        self.status.setText(f"{len(results)} Ergebnis{'se' if len(results) != 1 else ''}")
+        self.emoji_grid.set_emojis(self._apply_modifiers(results))
+        key = "status_results_plural" if len(results) != 1 else "status_results"
+        self.status.setText(t(self.locale, key, n=len(results)))
         self.scroll.verticalScrollBar().setValue(0)
 
     def on_emoji_selected(self, emoji):
         # Add to recent
-        recent = self.config.get("recent", [])
+        recent = load_recent()
         if emoji in recent:
             recent.remove(emoji)
         recent.insert(0, emoji)
-        max_recent = self.config.get("max_recent", 36)
-        self.config["recent"] = recent[:max_recent]
-        save_config(self.config)
+        save_recent(recent[:self.config.get("max_recent", 36)])
 
         # Flag to prevent focus-loss handler from killing the app
         self._inserting = True
@@ -588,10 +693,10 @@ class EmojiPicker(QWidget):
         favs = self.config.get("favorites", [])
         if emoji in favs:
             favs.remove(emoji)
-            self.status.setText(f"Favorit entfernt")
+            self.status.setText(t(self.locale, "fav_removed"))
         else:
             favs.append(emoji)
-            self.status.setText(f"Favorit hinzugefügt ⭐")
+            self.status.setText(t(self.locale, "fav_added"))
         self.config["favorites"] = favs
         save_config(self.config)
 

@@ -15,62 +15,91 @@ echo ""
 
 # ── 1. Check system ──────────────────────────
 if [ "$XDG_SESSION_TYPE" != "wayland" ]; then
-    echo "  ⚠️  Wayland nicht erkannt (XDG_SESSION_TYPE=$XDG_SESSION_TYPE)"
-    echo "  Emoji Picker ist für Wayland/KDE Plasma 6 gebaut."
-    read -p "  Trotzdem fortfahren? [j/N] " answer
-    if [[ "$answer" != "j" && "$answer" != "J" ]]; then
-        echo "  Abgebrochen."
+    echo "  ⚠️  Wayland not detected (XDG_SESSION_TYPE=$XDG_SESSION_TYPE)"
+    echo "  Emoji Picker is built for Wayland / KDE Plasma 6."
+    read -p "  Continue anyway? [y/N] " answer
+    if [[ "$answer" != "y" && "$answer" != "Y" ]]; then
+        echo "  Aborted."
         exit 1
     fi
 fi
 
-# ── 2. Check dependencies ───────────────────
-echo "  🔍 Prüfe Abhängigkeiten..."
+# ── 2. Detect package manager ────────────────
+if command -v apt &>/dev/null; then
+    PKG_MANAGER="apt"
+    PKG_PYQT6="python3-pyqt6"
+    PKG_CAIRO="python3-cairo"
+    PKG_GI="gir1.2-pango-1.0 python3-gi python3-gi-cairo"
+    PKG_YDOTOOL="ydotool"
+    PKG_WLCLIP="wl-clipboard"
+elif command -v dnf &>/dev/null; then
+    PKG_MANAGER="dnf"
+    PKG_PYQT6="python3-pyqt6"
+    PKG_CAIRO="python3-cairo"
+    PKG_GI="python3-gobject3"
+    PKG_YDOTOOL="ydotool"
+    PKG_WLCLIP="wl-clipboard"
+else
+    echo "  ❌ No supported package manager found (apt/dnf)."
+    echo "  Please install dependencies manually:"
+    echo "  python3-pyqt6, python3-cairo, python3-gi, ydotool, wl-clipboard"
+    exit 1
+fi
+
+pkg_install() {
+    sudo "$PKG_MANAGER" install -y "$@"
+}
+
+echo "  📦 Package manager: $PKG_MANAGER"
+
+# ── 3. Check dependencies ───────────────────
+echo "  🔍 Checking dependencies..."
 MISSING=()
 
 if ! python3 -c "import PyQt6" 2>/dev/null; then
-    MISSING+=("python3-pyqt6")
+    MISSING+=("$PKG_PYQT6")
 fi
 
 if ! python3 -c "import cairo" 2>/dev/null; then
-    MISSING+=("python3-cairo")
+    MISSING+=("$PKG_CAIRO")
 fi
 
 if ! python3 -c "import gi; gi.require_version('Pango','1.0'); gi.require_version('PangoCairo','1.0'); from gi.repository import Pango, PangoCairo" 2>/dev/null; then
-    MISSING+=("gir1.2-pango-1.0" "python3-gi" "python3-gi-cairo")
+    # shellcheck disable=SC2206
+    MISSING+=($PKG_GI)
 fi
 
 if ! command -v ydotool &>/dev/null; then
-    MISSING+=("ydotool")
+    MISSING+=("$PKG_YDOTOOL")
 fi
 
 if ! command -v wl-copy &>/dev/null; then
-    MISSING+=("wl-clipboard")
+    MISSING+=("$PKG_WLCLIP")
 fi
 
 if [ ${#MISSING[@]} -gt 0 ]; then
-    echo "  📦 Fehlende Pakete: ${MISSING[*]}"
-    read -p "  Jetzt installieren? [J/n] " answer
+    echo "  📦 Missing packages: ${MISSING[*]}"
+    read -p "  Install now? [Y/n] " answer
     if [[ "$answer" != "n" && "$answer" != "N" ]]; then
-        sudo apt install -y "${MISSING[@]}"
+        pkg_install "${MISSING[@]}"
     else
-        echo "  Abgebrochen. Bitte installiere die Pakete manuell:"
-        echo "  sudo apt install ${MISSING[*]}"
+        echo "  Aborted. Please install packages manually:"
+        echo "  sudo $PKG_MANAGER install ${MISSING[*]}"
         exit 1
     fi
 fi
 
-echo "  ✅ Alle Abhängigkeiten vorhanden"
+echo "  ✅ All dependencies satisfied"
 
-# ── 3. Setup ydotool ─────────────────────────
+# ── 4. Setup ydotool ─────────────────────────
 echo ""
-echo "  🔧 Konfiguriere ydotool..."
+echo "  🔧 Configuring ydotool..."
 
 NEED_RELOGIN=false
 
 # Add user to input group if needed
 if ! groups "$USER" | grep -qw input; then
-    echo "  Füge $USER zur Gruppe 'input' hinzu..."
+    echo "  Adding $USER to group 'input'..."
     sudo usermod -aG input "$USER"
     NEED_RELOGIN=true
 fi
@@ -85,17 +114,18 @@ if ! systemctl --user is-active ydotool &>/dev/null; then
     systemctl --user start ydotool 2>/dev/null || true
 fi
 
-echo "  ✅ ydotool konfiguriert"
+echo "  ✅ ydotool configured"
 
-# ── 4. Install files ─────────────────────────
+# ── 5. Install files ─────────────────────────
 echo ""
-echo "  📁 Installiere Dateien..."
+echo "  📁 Installing files..."
 
 mkdir -p "$INSTALL_DIR" "$BIN_DIR" "$DESKTOP_DIR"
 
 cp emoji_picker.py "$INSTALL_DIR/"
 cp emoji_data.py "$INSTALL_DIR/"
 cp search_tags.py "$INSTALL_DIR/"
+cp -r locales "$INSTALL_DIR/"
 
 # Create launcher script
 cat > "$BIN_DIR/emoji-picker" << 'LAUNCHER'
@@ -110,7 +140,7 @@ cat > "$DESKTOP_DIR/emoji-picker.desktop" << DESKTOP
 [Desktop Entry]
 Type=Application
 Name=Emoji Picker
-Comment=Schneller Emoji-Picker für KDE Plasma / Wayland
+Comment=Fast emoji picker for KDE Plasma / Wayland
 Exec=$BIN_DIR/emoji-picker
 Icon=face-smile
 Terminal=false
@@ -120,40 +150,40 @@ StartupNotify=false
 SingleMainWindow=true
 DESKTOP
 
-echo "  ✅ Dateien installiert"
+echo "  ✅ Files installed"
 
-# ── 5. Check PATH ────────────────────────────
+# ── 6. Check PATH ────────────────────────────
 if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
     echo ""
-    echo "  ⚠️  $BIN_DIR ist nicht in deinem PATH."
-    echo "  Füge folgende Zeile in deine ~/.bashrc ein:"
+    echo "  ⚠️  $BIN_DIR is not in your PATH."
+    echo "  Add the following line to your ~/.bashrc:"
     echo ""
     echo "    export PATH=\"\$HOME/.local/bin:\$PATH\""
     echo ""
 fi
 
-# ── 6. Done ──────────────────────────────────
+# ── 7. Done ──────────────────────────────────
 echo ""
 echo "  ════════════════════════════════════════"
-echo "  ✅ Emoji Picker erfolgreich installiert!"
+echo "  ✅ Emoji Picker installed successfully!"
 echo "  ════════════════════════════════════════"
 echo ""
-echo "  Starten:        emoji-picker"
-echo "  Deinstallieren:  ./uninstall.sh"
+echo "  Run:         emoji-picker"
+echo "  Uninstall:   ./uninstall.sh"
 echo ""
-echo "  📌 Shortcut einrichten:"
-echo "  Systemeinstellungen → Kurzbefehle → + Neu hinzufügen"
-echo "  → Befehl: emoji-picker"
+echo "  📌 Set up a keyboard shortcut:"
+echo "  System Settings → Keyboard → Shortcuts → + Add New → Command"
+echo "  → Command:  emoji-picker"
 echo "  → Shortcut: Meta+."
 echo ""
-echo "  (Den Standard-KDE-Emoji-Shortcut vorher deaktivieren)"
+echo "  (Disable the default KDE emoji shortcut first)"
 echo ""
-echo "  💡 Rechtsklick auf ein Emoji = Favorit"
+echo "  💡 Right-click any emoji to add it to favorites"
 echo ""
 
 if [ "$NEED_RELOGIN" = true ]; then
-    echo "  ⚠️  WICHTIG: Du wurdest zur Gruppe 'input' hinzugefügt."
-    echo "  Bitte einmal abmelden und neu anmelden, damit"
-    echo "  ydotool (direktes Einfügen) funktioniert!"
+    echo "  ⚠️  IMPORTANT: You were added to the 'input' group."
+    echo "  Please log out and back in for ydotool"
+    echo "  (direct emoji insertion) to work."
     echo ""
 fi
