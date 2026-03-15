@@ -24,7 +24,7 @@ gi.require_version('Pango', '1.0')
 gi.require_version('PangoCairo', '1.0')
 from gi.repository import Pango, PangoCairo
 
-from emoji_data import EMOJI_CATEGORIES, ALL_EMOJIS
+from emoji_data import EMOJI_CATEGORIES, ALL_EMOJIS, SKIN_TONE_EMOJIS
 from search_tags import SEARCH_TAGS
 
 # Cache rendered emoji pixmaps
@@ -73,6 +73,16 @@ def render_emoji_pixmap(emoji, size=32):
 CONFIG_DIR = Path.home() / ".config" / "emoji-picker"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
+SKIN_TONE_MODIFIERS = [
+    ("", "#FBBF24"),        # default (gelb)
+    ("\U0001F3FB", "#FDDBB4"),  # hell
+    ("\U0001F3FC", "#E8AA80"),  # mittel-hell
+    ("\U0001F3FD", "#C68642"),  # mittel
+    ("\U0001F3FE", "#8B5A2B"),  # mittel-dunkel
+    ("\U0001F3FF", "#4A2912"),  # dunkel
+]
+
+
 DEFAULT_CONFIG = {
     "favorites": [],
     "recent": [],
@@ -81,6 +91,7 @@ DEFAULT_CONFIG = {
     "emoji_size": 28,
     "close_on_select": True,
     "insert_method": "ydotool",  # "ydotool", "clipboard"
+    "skin_tone": "",
 }
 
 
@@ -123,6 +134,36 @@ def insert_emoji(emoji, method="ydotool"):
 
     # Clipboard filled — user can Ctrl+V manually as last resort
     return False
+
+
+class SkinToneButton(QPushButton):
+    """A small circular button for skin tone selection."""
+    def __init__(self, tone, color, tooltip, parent=None):
+        super().__init__(parent)
+        self.tone = tone
+        self._color = color
+        self.setFixedSize(18, 18)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setCheckable(True)
+        self.setToolTip(tooltip)
+        self._refresh_style()
+
+    def setChecked(self, checked):
+        super().setChecked(checked)
+        self._refresh_style()
+
+    def _refresh_style(self):
+        border = "2px solid #dbdee1" if self.isChecked() else "2px solid transparent"
+        self.setStyleSheet(f"""
+            QPushButton {{
+                background: {self._color};
+                border: {border};
+                border-radius: 9px;
+            }}
+            QPushButton:hover {{
+                border: 2px solid rgba(255, 255, 255, 0.5);
+            }}
+        """)
 
 
 class EmojiButton(QToolButton):
@@ -337,6 +378,19 @@ class EmojiPicker(QWidget):
             self.category_buttons[key] = btn
 
         cat_layout.addStretch()
+
+        # Skin tone selector
+        cat_layout.addSpacing(6)
+        self.skin_tone_buttons = []
+        current_tone = self.config.get("skin_tone", "")
+        tooltips = ["Standard", "Hell", "Mittel-hell", "Mittel", "Mittel-dunkel", "Dunkel"]
+        for (tone, color), tooltip in zip(SKIN_TONE_MODIFIERS, tooltips):
+            btn = SkinToneButton(tone, color, tooltip)
+            btn.setChecked(tone == current_tone)
+            btn.clicked.connect(lambda checked, t=tone: self.set_skin_tone(t))
+            cat_layout.addWidget(btn)
+            self.skin_tone_buttons.append(btn)
+
         layout.addLayout(cat_layout)
 
         # Separator
@@ -407,6 +461,29 @@ class EmojiPicker(QWidget):
             y = (geo.height() - self.height()) // 2 + geo.y()
             self.move(x, y)
 
+    def _apply_skin_tone(self, emojis):
+        """Apply the configured skin tone modifier to all compatible emojis."""
+        tone = self.config.get("skin_tone", "")
+        if not tone:
+            return emojis
+        result = []
+        for emoji, name in emojis:
+            if emoji in SKIN_TONE_EMOJIS:
+                result.append((emoji + tone, name))
+            else:
+                result.append((emoji, name))
+        return result
+
+    def set_skin_tone(self, tone):
+        self.config["skin_tone"] = tone
+        save_config(self.config)
+        for btn in self.skin_tone_buttons:
+            btn.setChecked(btn.tone == tone)
+        if self._search_text:
+            self._do_search()
+        elif self.current_category:
+            self.show_category(self.current_category)
+
     def show_category(self, category):
         self.current_category = category
         self.search.clear()
@@ -420,18 +497,18 @@ class EmojiPicker(QWidget):
             for e in self.config.get("recent", []):
                 name = ALL_EMOJIS.get(e, "")
                 emojis.append((e, name))
-            self.emoji_grid.set_emojis(emojis)
+            self.emoji_grid.set_emojis(self._apply_skin_tone(emojis))
             self.status.setText(f"{len(emojis)} kürzlich verwendet")
         elif category == "favorites":
             emojis = []
             for e in self.config.get("favorites", []):
                 name = ALL_EMOJIS.get(e, "")
                 emojis.append((e, name))
-            self.emoji_grid.set_emojis(emojis)
+            self.emoji_grid.set_emojis(self._apply_skin_tone(emojis))
             self.status.setText(f"{len(emojis)} Favoriten  •  Rechtsklick zum Entfernen")
         else:
             emojis = EMOJI_CATEGORIES.get(category, [])
-            self.emoji_grid.set_emojis(emojis)
+            self.emoji_grid.set_emojis(self._apply_skin_tone(emojis))
             self.status.setText(f"{len(emojis)} Emojis  •  Rechtsklick = Favorit")
 
         self.scroll.verticalScrollBar().setValue(0)
@@ -473,7 +550,7 @@ class EmojiPicker(QWidget):
                     results.append((emoji, name))
                     seen.add(emoji)
 
-        self.emoji_grid.set_emojis(results)
+        self.emoji_grid.set_emojis(self._apply_skin_tone(results))
         self.status.setText(f"{len(results)} Ergebnis{'se' if len(results) != 1 else ''}")
         self.scroll.verticalScrollBar().setValue(0)
 
