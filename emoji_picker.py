@@ -350,7 +350,22 @@ class EmojiPicker(QWidget):
             }
         """)
         self.search.textChanged.connect(self.on_search)
-        layout.addWidget(self.search)
+
+        search_row = QHBoxLayout()
+        search_row.setSpacing(4)
+        search_row.addWidget(self.search)
+
+        self.skin_tone_buttons = []
+        current_tone = self.config.get("skin_tone", "")
+        tooltips = ["Standard", "Hell", "Mittel-hell", "Mittel", "Mittel-dunkel", "Dunkel"]
+        for (tone, color), tooltip in zip(SKIN_TONE_MODIFIERS, tooltips):
+            btn = SkinToneButton(tone, color, tooltip)
+            btn.setChecked(tone == current_tone)
+            btn.clicked.connect(lambda checked, t=tone: self.set_skin_tone(t))
+            search_row.addWidget(btn)
+            self.skin_tone_buttons.append(btn)
+
+        layout.addLayout(search_row)
 
         # Category bar
         cat_layout = QHBoxLayout()
@@ -378,19 +393,6 @@ class EmojiPicker(QWidget):
             self.category_buttons[key] = btn
 
         cat_layout.addStretch()
-
-        # Skin tone selector
-        cat_layout.addSpacing(6)
-        self.skin_tone_buttons = []
-        current_tone = self.config.get("skin_tone", "")
-        tooltips = ["Standard", "Hell", "Mittel-hell", "Mittel", "Mittel-dunkel", "Dunkel"]
-        for (tone, color), tooltip in zip(SKIN_TONE_MODIFIERS, tooltips):
-            btn = SkinToneButton(tone, color, tooltip)
-            btn.setChecked(tone == current_tone)
-            btn.clicked.connect(lambda checked, t=tone: self.set_skin_tone(t))
-            cat_layout.addWidget(btn)
-            self.skin_tone_buttons.append(btn)
-
         layout.addLayout(cat_layout)
 
         # Separator
@@ -469,7 +471,8 @@ class EmojiPicker(QWidget):
         result = []
         for emoji, name in emojis:
             if emoji in SKIN_TONE_EMOJIS:
-                result.append((emoji + tone, name))
+                base = emoji.replace('\uFE0F', '')
+                result.append((base + tone, name))
             else:
                 result.append((emoji, name))
         return result
