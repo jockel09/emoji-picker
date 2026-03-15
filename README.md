@@ -48,7 +48,7 @@ The installer will:
 
 Set up a global shortcut in KDE:
 
-1. **System Settings** → **Shortcuts** → **+ Add New** → **Command**
+1. **System Settings** → **Keyboard** → **Shortcuts** → **+ Add New** → **Command**
 2. **Command:** `emoji-picker`
 3. **Shortcut:** `Meta+.` (or whatever you prefer)
 4. Disable the default KDE emoji picker shortcut first
