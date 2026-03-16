@@ -190,6 +190,7 @@ class SkinToneButton(QPushButton):
         self.setFixedSize(18, 18)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setCheckable(True)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setToolTip(tooltip)
         self._refresh_style()
 
@@ -219,6 +220,7 @@ class GenderButton(QPushButton):
         self.setFixedSize(20, 20)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setCheckable(True)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setToolTip(tooltip)
         self._refresh_style()
 
@@ -251,6 +253,7 @@ class EmojiButton(QToolButton):
     """A clickable emoji button with color rendering."""
     emoji_selected = pyqtSignal(str)
     emoji_fav_toggle = pyqtSignal(str)
+    emoji_delete = pyqtSignal(str)
 
     def __init__(self, emoji, name="", parent=None):
         super().__init__(parent)
@@ -279,8 +282,22 @@ class EmojiButton(QToolButton):
             QToolButton:pressed {
                 background: rgba(255, 255, 255, 0.15);
             }
+            QToolButton:focus {
+                background: rgba(255, 255, 255, 0.10);
+                border: 1px solid rgba(255, 255, 255, 0.35);
+            }
         """)
         self.clicked.connect(lambda: self.emoji_selected.emit(self.emoji))
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
+            self.emoji_selected.emit(self.emoji)
+        elif event.key() == Qt.Key.Key_Delete:
+            self.emoji_delete.emit(self.emoji)
+        elif event.key() == Qt.Key.Key_F:
+            self.emoji_fav_toggle.emit(self.emoji)
+        else:
+            super().keyPressEvent(event)
 
     def contextMenuEvent(self, event):
         self.emoji_fav_toggle.emit(self.emoji)
@@ -295,6 +312,7 @@ class CategoryButton(QPushButton):
         self.setFixedSize(36, 36)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setCheckable(True)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
         # Render color emoji icon
         pixmap = render_emoji_pixmap(icon_emoji, 24)
@@ -325,6 +343,7 @@ class EmojiGrid(QWidget):
     """A grid of emoji buttons."""
     emoji_selected = pyqtSignal(str)
     emoji_fav_toggle = pyqtSignal(str)
+    emoji_delete = pyqtSignal(str)
 
     def __init__(self, columns=9, parent=None):
         super().__init__(parent)
@@ -333,26 +352,62 @@ class EmojiGrid(QWidget):
         self.layout_.setSpacing(2)
         self.layout_.setContentsMargins(4, 4, 4, 4)
         self.buttons = []
+        self._last_row_stretch = 0
 
     def set_emojis(self, emojis):
         """emojis: list of (emoji, name) tuples"""
-        # Clear existing
-        for btn in self.buttons:
-            self.layout_.removeWidget(btn)
-            btn.deleteLater()
+        # Remove all items from layout (releases grid cells, not just widget references)
+        while self.layout_.count():
+            item = self.layout_.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        # Reset row stretches from previous call
+        for r in range(self._last_row_stretch + 1):
+            self.layout_.setRowStretch(r, 0)
         self.buttons.clear()
 
         for i, (emoji, name) in enumerate(emojis):
             btn = EmojiButton(emoji, name)
             btn.emoji_selected.connect(self.emoji_selected.emit)
             btn.emoji_fav_toggle.connect(self.emoji_fav_toggle.emit)
+            btn.emoji_delete.connect(self.emoji_delete.emit)
+            btn.installEventFilter(self)
             row = i // self.columns
             col = i % self.columns
             self.layout_.addWidget(btn, row, col)
             self.buttons.append(btn)
 
-        # Add stretch at the bottom
-        self.layout_.setRowStretch(len(emojis) // self.columns + 1, 1)
+        # Add stretch at the bottom so rows don't spread across the scroll area
+        new_last_row = len(emojis) // self.columns + 1
+        self.layout_.setRowStretch(new_last_row, 1)
+        self._last_row_stretch = new_last_row
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.KeyPress and obj in self.buttons:
+            idx = self.buttons.index(obj)
+            key = event.key()
+            if key == Qt.Key.Key_Left and idx > 0:
+                self.buttons[idx - 1].setFocus()
+                return True
+            elif key == Qt.Key.Key_Right and idx < len(self.buttons) - 1:
+                self.buttons[idx + 1].setFocus()
+                return True
+            elif key == Qt.Key.Key_Up:
+                new_idx = idx - self.columns
+                if new_idx >= 0:
+                    self.buttons[new_idx].setFocus()
+                return True
+            elif key == Qt.Key.Key_Down:
+                new_idx = idx + self.columns
+                if new_idx < len(self.buttons):
+                    self.buttons[new_idx].setFocus()
+                return True
+        return super().eventFilter(obj, event)
+
+    def focus_button(self, idx):
+        """Set focus to button at idx, clamped to valid range."""
+        if self.buttons:
+            self.buttons[max(0, min(idx, len(self.buttons) - 1))].setFocus()
 
 
 class EmojiPicker(QWidget):
@@ -417,6 +472,7 @@ class EmojiPicker(QWidget):
         self.search = QLineEdit()
         self.search.setPlaceholderText(t(self.locale, "search_placeholder"))
         self.search.setClearButtonEnabled(True)
+        self.search.installEventFilter(self)
         self.search.setStyleSheet("""
             QLineEdit {
                 background: #1e1f22;
@@ -480,6 +536,7 @@ class EmojiPicker(QWidget):
             ("🏁", "flags",      t(self.locale, "cat_flags")),
         ]
 
+        self.category_order = [key for _, key, _ in categories]
         for icon, key, label in categories:
             btn = CategoryButton(icon, label)
             btn.clicked.connect(lambda checked, k=key: self.show_category(k))
@@ -488,6 +545,13 @@ class EmojiPicker(QWidget):
 
         cat_layout.addStretch()
         layout.addLayout(cat_layout)
+
+        QShortcut(QKeySequence("Ctrl+Left"), self).activated.connect(
+            lambda: self._switch_category(-1)
+        )
+        QShortcut(QKeySequence("Ctrl+Right"), self).activated.connect(
+            lambda: self._switch_category(1)
+        )
 
         # Separator
         sep = QFrame()
@@ -499,6 +563,7 @@ class EmojiPicker(QWidget):
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scroll.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.scroll.setStyleSheet("""
             QScrollArea {
                 border: none;
@@ -528,6 +593,7 @@ class EmojiPicker(QWidget):
         self.emoji_grid = EmojiGrid(columns=self.config.get("columns", 9))
         self.emoji_grid.emoji_selected.connect(self.on_emoji_selected)
         self.emoji_grid.emoji_fav_toggle.connect(self.on_fav_toggle)
+        self.emoji_grid.emoji_delete.connect(self.on_remove_recent)
         self.scroll.setWidget(self.emoji_grid)
         layout.addWidget(self.scroll)
 
@@ -704,6 +770,21 @@ class EmojiPicker(QWidget):
         if self.current_category == "favorites":
             self.show_category("favorites")
 
+    def on_remove_recent(self, emoji):
+        focused_idx = next(
+            (i for i, btn in enumerate(self.emoji_grid.buttons) if btn.emoji == emoji), 0
+        )
+        if self.current_category == "recent":
+            recent = load_recent()
+            if emoji in recent:
+                recent.remove(emoji)
+                save_recent(recent)
+                self.show_category("recent")
+                QTimer.singleShot(0, lambda: self.emoji_grid.focus_button(focused_idx))
+        elif self.current_category == "favorites":
+            self.on_fav_toggle(emoji)
+            QTimer.singleShot(0, lambda: self.emoji_grid.focus_button(focused_idx))
+
     def showEvent(self, event):
         super().showEvent(event)
         self.search.setFocus()
@@ -711,6 +792,23 @@ class EmojiPicker(QWidget):
 
     def focusOutEvent(self, event):
         super().focusOutEvent(event)
+
+    def eventFilter(self, obj, event):
+        if obj is self.search and event.type() == QEvent.Type.KeyPress:
+            if event.modifiers() & Qt.KeyboardModifier.ControlModifier and not self.search.text():
+                if event.key() == Qt.Key.Key_Left:
+                    self._switch_category(-1)
+                    return True
+                elif event.key() == Qt.Key.Key_Right:
+                    self._switch_category(1)
+                    return True
+        return super().eventFilter(obj, event)
+
+    def _switch_category(self, direction):
+        if self.current_category in self.category_order:
+            idx = self.category_order.index(self.current_category)
+            self.show_category(self.category_order[(idx + direction) % len(self.category_order)])
+            QTimer.singleShot(0, lambda: self.emoji_grid.focus_button(0))
 
     def changeEvent(self, event):
         """Close when window loses focus (unless we're inserting an emoji)."""

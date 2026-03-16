@@ -178,8 +178,6 @@ echo "  → Shortcut: Meta+."
 echo ""
 echo "  (Disable the default KDE emoji shortcut first)"
 echo ""
-echo "  💡 Right-click any emoji to add it to favorites"
-echo ""
 
 if [ "$NEED_RELOGIN" = true ]; then
     echo "  ⚠️  IMPORTANT: You were added to the 'input' group."

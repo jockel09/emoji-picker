@@ -17,6 +17,7 @@ Built because the default KDE emoji picker can't directly insert emojis under Wa
 - ✅ **Skin tone selector** — 6 Fitzpatrick tones, applied to all compatible emojis
 - ✅ **Gender selector** — neutral / ♂ / ♀, combinable with skin tone
 - ✅ **Localization** — English and German included, easily extensible
+- ✅ **Keyboard navigation** — fully operable without a mouse
 - ✅ **Color emojis** — rendered via Cairo/Pango (not Qt's broken text rendering)
 - ✅ **Dark theme** — matches KDE Breeze Dark
 - ✅ **Focus-loss close** — click outside to dismiss
@@ -65,6 +66,17 @@ Set up a global shortcut in KDE:
 | **Type** in search | Filter by name (German + English) |
 | **Escape** | Close the picker |
 | **Click outside** | Close the picker |
+
+### Keyboard navigation
+
+| Key | Action |
+|---|---|
+| `Tab` | Jump from search field to emoji grid |
+| `Arrow keys` | Navigate within the emoji grid |
+| `Enter` / `Space` | Insert the focused emoji |
+| `F` | Toggle favorite on focused emoji |
+| `Del` | Remove focused emoji from Recents or Favorites |
+| `Ctrl+←` / `Ctrl+→` | Switch category (also works in empty search field) |
 
 ### Search examples
 
