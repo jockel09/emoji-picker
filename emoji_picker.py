@@ -93,6 +93,43 @@ def render_emoji_pixmap(emoji, size=32):
 
 CONFIG_DIR = Path.home() / ".config" / "emoji-picker"
 CONFIG_FILE = CONFIG_DIR / "config.json"
+KAOMOJI_FILE = CONFIG_DIR / "kaomoji.json"
+
+DEFAULT_KAOMOJI = [
+    {"text": "¯\\_(ツ)_/¯",          "name": "shrug"},
+    {"text": "(╯°□°）╯︵ ┻━┻",       "name": "table flip"},
+    {"text": "┬─┬ノ( º _ ºノ)",      "name": "table unflip"},
+    {"text": "( ͡° ͜ʖ ͡°)",          "name": "lenny face"},
+    {"text": "(ง'̀-'́)ง",             "name": "fight"},
+    {"text": "(づ｡◕‿‿◕｡)づ",         "name": "hug"},
+    {"text": "ʕ•ᴥ•ʔ",               "name": "bear"},
+    {"text": "(ノ°益°)ノ",            "name": "rage"},
+    {"text": "¯\\(°_o)/¯",           "name": "confused"},
+    {"text": "(◕‿◕✿)",               "name": "cute"},
+    {"text": "凸(¬‿¬)凸",            "name": "middle finger"},
+    {"text": "(•̀ᴗ•́)و",             "name": "motivated"},
+    {"text": "٩(◕‿◕｡)۶",            "name": "happy"},
+    {"text": "(｡•́︿•̀｡)",            "name": "sad"},
+    {"text": "(＾▽＾)",               "name": "smile"},
+    {"text": "o(≧▽≦)o",             "name": "excited"},
+    {"text": "(;一_一)",              "name": "annoyed"},
+    {"text": "( •_•)>⌐■-■",         "name": "deal with it"},
+    {"text": "(ಠ_ಠ)",               "name": "disapproval"},
+    {"text": "(*≧▽≦)",              "name": "joy"},
+]
+
+
+def load_kaomoji():
+    if not KAOMOJI_FILE.exists():
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        with open(KAOMOJI_FILE, "w", encoding="utf-8") as f:
+            json.dump(DEFAULT_KAOMOJI, f, ensure_ascii=False, indent=2)
+        return DEFAULT_KAOMOJI
+    try:
+        with open(KAOMOJI_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return DEFAULT_KAOMOJI
 
 RECENT_FILE = Path.home() / ".local" / "share" / "emoji-picker" / "recent.json"
 
@@ -137,6 +174,7 @@ DEFAULT_CONFIG = {
     "skin_tone": "",
     "gender": "",
     "language": "en",
+    "kaomoji": False,
 }
 
 
@@ -148,10 +186,18 @@ def load_config():
                 saved = json.load(f)
             config = DEFAULT_CONFIG.copy()
             config.update(saved)
+            # Write back any new keys from DEFAULT_CONFIG that were missing
+            new_keys = [k for k in DEFAULT_CONFIG if k not in saved]
+            if new_keys:
+                with open(CONFIG_FILE, "w") as f:
+                    json.dump(config, f, ensure_ascii=False, indent=2)
             return config
         except (json.JSONDecodeError, IOError):
             pass
-    return DEFAULT_CONFIG.copy()
+    config = DEFAULT_CONFIG.copy()
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(config, f, ensure_ascii=False, indent=2)
+    return config
 
 
 def save_config(config):
@@ -255,18 +301,32 @@ class EmojiButton(QToolButton):
     emoji_fav_toggle = pyqtSignal(str)
     emoji_delete = pyqtSignal(str)
 
-    def __init__(self, emoji, name="", parent=None):
+    def __init__(self, emoji, name="", kaomoji=False, parent=None):
         super().__init__(parent)
         self.emoji = emoji
         self.emoji_name = name
-        self.setFixedSize(42, 42)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setToolTip(name)
+        self.setToolTip(f"{emoji}  {name}" if kaomoji else name)
 
-        # Render color emoji via Cairo/Pango
-        pixmap = render_emoji_pixmap(emoji, 32)
-        self.setIcon(QIcon(pixmap))
-        self.setIconSize(QSize(32, 32))
+        if kaomoji == "list":
+            # Full-width list style (Kaomoji tab)
+            self.setFixedHeight(34)
+            self.setMinimumWidth(200)
+            self.setText(emoji)
+            self.setFont(QFont("Monospace", 9))
+            self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        elif kaomoji == "grid":
+            # Compact grid style (Recents/Favorites)
+            self.setFixedSize(42, 42)
+            self.setText(emoji[:6] + "…" if len(emoji) > 6 else emoji)
+            self.setFont(QFont("Monospace", 7))
+            self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        else:
+            self.setFixedSize(42, 42)
+            # Render color emoji via Cairo/Pango
+            pixmap = render_emoji_pixmap(emoji, 32)
+            self.setIcon(QIcon(pixmap))
+            self.setIconSize(QSize(32, 32))
 
         self.setStyleSheet("""
             QToolButton {
@@ -353,9 +413,11 @@ class EmojiGrid(QWidget):
         self.layout_.setSpacing(2)
         self.layout_.setContentsMargins(4, 4, 4, 4)
         self.buttons = []
+        self._cols = columns
         self._last_row_stretch = 0
+        self.scroll_area = None
 
-    def set_emojis(self, emojis):
+    def set_emojis(self, emojis, kaomoji=False, kaomoji_set=None):
         """emojis: list of (emoji, name) tuples"""
         # Remove all items from layout (releases grid cells, not just widget references)
         while self.layout_.count():
@@ -367,21 +429,39 @@ class EmojiGrid(QWidget):
             self.layout_.setRowStretch(r, 0)
         self.buttons.clear()
 
-        for i, (emoji, name) in enumerate(emojis):
-            btn = EmojiButton(emoji, name)
+        cols = 1 if kaomoji else self.columns
+        self._cols = cols
+        row, col = 0, 0
+        for emoji, name in emojis:
+            is_kao = kaomoji or bool(kaomoji_set and emoji in kaomoji_set)
+            kao_mode = ("list" if kaomoji else "grid") if is_kao else False
+            btn = EmojiButton(emoji, name, kaomoji=kao_mode)
             btn.emoji_selected.connect(self.emoji_selected.emit)
             btn.emoji_fav_toggle.connect(self.emoji_fav_toggle.emit)
             btn.emoji_delete.connect(self.emoji_delete.emit)
             btn.installEventFilter(self)
-            row = i // self.columns
-            col = i % self.columns
-            self.layout_.addWidget(btn, row, col)
+            if is_kao and not kaomoji:
+                self.layout_.addWidget(btn, row, col)
+                col += 1
+                if col >= self.columns:
+                    col = 0
+                    row += 1
+            else:
+                self.layout_.addWidget(btn, row, col)
+                col += 1
+                if col >= cols:
+                    col = 0
+                    row += 1
             self.buttons.append(btn)
 
         # Add stretch at the bottom so rows don't spread across the scroll area
-        new_last_row = len(emojis) // self.columns + 1
-        self.layout_.setRowStretch(new_last_row, 1)
-        self._last_row_stretch = new_last_row
+        self.layout_.setRowStretch(row + 1, 1)
+        self._last_row_stretch = row + 1
+
+    def _focus_and_scroll(self, btn):
+        btn.setFocus()
+        if self.scroll_area:
+            QTimer.singleShot(0, lambda: self.scroll_area.ensureWidgetVisible(btn))
 
     def eventFilter(self, obj, event):
         if event.type() == QEvent.Type.KeyPress and obj in self.buttons:
@@ -395,20 +475,20 @@ class EmojiGrid(QWidget):
                 self.emoji_move.emit(obj.emoji, 1)
                 return True
             elif key == Qt.Key.Key_Left and idx > 0:
-                self.buttons[idx - 1].setFocus()
+                self._focus_and_scroll(self.buttons[idx - 1])
                 return True
             elif key == Qt.Key.Key_Right and idx < len(self.buttons) - 1:
-                self.buttons[idx + 1].setFocus()
+                self._focus_and_scroll(self.buttons[idx + 1])
                 return True
             elif key == Qt.Key.Key_Up:
-                new_idx = idx - self.columns
+                new_idx = idx - self._cols
                 if new_idx >= 0:
-                    self.buttons[new_idx].setFocus()
+                    self._focus_and_scroll(self.buttons[new_idx])
                 return True
             elif key == Qt.Key.Key_Down:
-                new_idx = idx + self.columns
+                new_idx = idx + self._cols
                 if new_idx < len(self.buttons):
-                    self.buttons[new_idx].setFocus()
+                    self._focus_and_scroll(self.buttons[new_idx])
                 return True
         return super().eventFilter(obj, event)
 
@@ -543,6 +623,8 @@ class EmojiPicker(QWidget):
             ("🔣", "symbols",    t(self.locale, "cat_symbols")),
             ("🏁", "flags",      t(self.locale, "cat_flags")),
         ]
+        if self.config.get("kaomoji", True):
+            categories.append(("ツ", "kaomoji", t(self.locale, "cat_kaomoji")))
 
         self.category_order = [key for _, key, _ in categories]
         for icon, key, label in categories:
@@ -604,6 +686,7 @@ class EmojiPicker(QWidget):
         self.emoji_grid.emoji_delete.connect(self.on_remove_recent)
         self.emoji_grid.emoji_move.connect(self.on_move_favorite)
         self.scroll.setWidget(self.emoji_grid)
+        self.emoji_grid.scroll_area = self.scroll
         layout.addWidget(self.scroll)
 
         # Status bar
@@ -674,6 +757,11 @@ class EmojiPicker(QWidget):
             btn.setChecked(btn.gender == gender)
         self._refresh_view()
 
+    def _kaomoji_set(self):
+        if not self.config.get("kaomoji", True):
+            return set()
+        return {k["text"] for k in load_kaomoji()}
+
     def show_category(self, category):
         self.current_category = category
         self.search.clear()
@@ -683,13 +771,17 @@ class EmojiPicker(QWidget):
             btn.setChecked(key == category)
 
         if category == "recent":
-            emojis = [(e, ALL_EMOJIS.get(e, "")) for e in load_recent()]
-            self.emoji_grid.set_emojis(self._apply_modifiers(emojis))
+            emojis = [(e, ALL_EMOJIS.get(e, e)) for e in load_recent()]
+            self.emoji_grid.set_emojis(self._apply_modifiers(emojis), kaomoji_set=self._kaomoji_set())
             self.status.setText(t(self.locale, "status_recent", n=len(emojis)))
         elif category == "favorites":
-            emojis = [(e, ALL_EMOJIS.get(e, "")) for e in self.config.get("favorites", [])]
-            self.emoji_grid.set_emojis(self._apply_modifiers(emojis))
+            emojis = [(e, ALL_EMOJIS.get(e, e)) for e in self.config.get("favorites", [])]
+            self.emoji_grid.set_emojis(self._apply_modifiers(emojis), kaomoji_set=self._kaomoji_set())
             self.status.setText(t(self.locale, "status_favorites", n=len(emojis)))
+        elif category == "kaomoji":
+            items = [(k["text"], k["name"]) for k in load_kaomoji()]
+            self.emoji_grid.set_emojis(items, kaomoji=True)
+            self.status.setText(t(self.locale, "status_emojis", n=len(items)))
         else:
             emojis = EMOJI_CATEGORIES.get(category, [])
             self.emoji_grid.set_emojis(self._apply_modifiers(emojis))
@@ -734,7 +826,15 @@ class EmojiPicker(QWidget):
                     results.append((emoji, name))
                     seen.add(emoji)
 
-        self.emoji_grid.set_emojis(self._apply_modifiers(results))
+        # Also search kaomoji
+        if self.config.get("kaomoji", True):
+            for k in load_kaomoji():
+                txt, name = k["text"], k["name"]
+                if txt not in seen and text in name.lower():
+                    results.append((txt, name))
+                    seen.add(txt)
+
+        self.emoji_grid.set_emojis(self._apply_modifiers(results), kaomoji_set=self._kaomoji_set())
         key = "status_results_plural" if len(results) != 1 else "status_results"
         self.status.setText(t(self.locale, key, n=len(results)))
         self.scroll.verticalScrollBar().setValue(0)

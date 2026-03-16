@@ -17,6 +17,7 @@ Built because the default KDE emoji picker can't directly insert emojis under Wa
 - ✅ **Skin tone selector** — 6 Fitzpatrick tones, applied to all compatible emojis
 - ✅ **Gender selector** — neutral / ♂ / ♀, combinable with skin tone
 - ✅ **Localization** — English and German included, easily extensible
+- ✅ **Kaomoji support** — optional tab with text-based emoticons, fully customizable via `kaomoji.json`
 - ✅ **Keyboard navigation** — fully operable without a mouse
 - ✅ **Color emojis** — rendered via Cairo/Pango (not Qt's broken text rendering)
 - ✅ **Dark theme** — matches KDE Breeze Dark
@@ -105,13 +106,27 @@ Settings are stored in `~/.config/emoji-picker/config.json`:
   "insert_method": "ydotool",
   "skin_tone": "",
   "gender": "",
-  "language": "en"
+  "language": "en",
+  "kaomoji": false
 }
 ```
 
 Recently used emojis are stored separately in `~/.local/share/emoji-picker/recent.json` so dotfile managers (chezmoi, stow) can ignore it independently of the config.
 
 To use German, set `"language": "de"`. Custom languages can be added by creating a new file in the `locales/` directory.
+
+### Kaomoji
+
+Set `"kaomoji": true` to enable the Kaomoji tab (ツ). On first launch, a default set is written to `~/.config/emoji-picker/kaomoji.json`. Add your own by editing that file:
+
+```json
+[
+  {"text": "¯\\_(ツ)_/¯", "name": "shrug"},
+  {"text": "(╯°□°）╯︵ ┻━┻", "name": "table flip"}
+]
+```
+
+Kaomoji are searchable by name and can be added to favorites just like regular emojis.
 
 ## Uninstall
 
