@@ -77,6 +77,7 @@ Set up a global shortcut in KDE:
 | `F` | Toggle favorite on focused emoji |
 | `Del` | Remove focused emoji from Recents or Favorites |
 | `Ctrl+←` / `Ctrl+→` | Switch category (also works in empty search field) |
+| `Alt+←` / `Alt+→` | Move focused emoji left/right within Favorites |
 
 ### Search examples
 

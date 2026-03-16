@@ -344,6 +344,7 @@ class EmojiGrid(QWidget):
     emoji_selected = pyqtSignal(str)
     emoji_fav_toggle = pyqtSignal(str)
     emoji_delete = pyqtSignal(str)
+    emoji_move = pyqtSignal(str, int)  # emoji, direction (-1 or +1)
 
     def __init__(self, columns=9, parent=None):
         super().__init__(parent)
@@ -386,7 +387,14 @@ class EmojiGrid(QWidget):
         if event.type() == QEvent.Type.KeyPress and obj in self.buttons:
             idx = self.buttons.index(obj)
             key = event.key()
-            if key == Qt.Key.Key_Left and idx > 0:
+            alt = event.modifiers() & Qt.KeyboardModifier.AltModifier
+            if alt and key == Qt.Key.Key_Left:
+                self.emoji_move.emit(obj.emoji, -1)
+                return True
+            elif alt and key == Qt.Key.Key_Right:
+                self.emoji_move.emit(obj.emoji, 1)
+                return True
+            elif key == Qt.Key.Key_Left and idx > 0:
                 self.buttons[idx - 1].setFocus()
                 return True
             elif key == Qt.Key.Key_Right and idx < len(self.buttons) - 1:
@@ -594,6 +602,7 @@ class EmojiPicker(QWidget):
         self.emoji_grid.emoji_selected.connect(self.on_emoji_selected)
         self.emoji_grid.emoji_fav_toggle.connect(self.on_fav_toggle)
         self.emoji_grid.emoji_delete.connect(self.on_remove_recent)
+        self.emoji_grid.emoji_move.connect(self.on_move_favorite)
         self.scroll.setWidget(self.emoji_grid)
         layout.addWidget(self.scroll)
 
@@ -803,6 +812,21 @@ class EmojiPicker(QWidget):
                     self._switch_category(1)
                     return True
         return super().eventFilter(obj, event)
+
+    def on_move_favorite(self, emoji, direction):
+        if self.current_category != "favorites":
+            return
+        favs = self.config.get("favorites", [])
+        if emoji not in favs:
+            return
+        idx = favs.index(emoji)
+        new_idx = idx + direction
+        if 0 <= new_idx < len(favs):
+            favs[idx], favs[new_idx] = favs[new_idx], favs[idx]
+            self.config["favorites"] = favs
+            save_config(self.config)
+            self.show_category("favorites")
+            QTimer.singleShot(0, lambda: self.emoji_grid.focus_button(new_idx))
 
     def _switch_category(self, direction):
         if self.current_category in self.category_order:
