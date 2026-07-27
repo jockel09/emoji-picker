@@ -27,7 +27,7 @@ Built because the default KDE emoji picker can't directly insert emojis under Wa
 ## Requirements
 
 - **Debian 13 (Trixie)** / KDE Plasma 6 / Wayland
-- Should also work on other Debian/Ubuntu-based or Fedora-based distros with Wayland + KDE
+- Should also work on other Debian/Ubuntu-based, Fedora-based, or Arch-based distros with Wayland + KDE
 
 The install script handles all dependencies automatically.
 
