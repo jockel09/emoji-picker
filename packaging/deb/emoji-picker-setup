@@ -1,0 +1,59 @@
+#!/bin/bash
+# ─────────────────────────────────────────────
+# Emoji Picker — per-user setup
+#
+# Direct insertion writes to /dev/uinput, which udev grants to group 'input',
+# and drives it through the ydotool service, which runs per user. Both are
+# tied to your account, so a package install can't do them for you.
+# ─────────────────────────────────────────────
+set -e
+
+if [ "$(id -u)" -eq 0 ]; then
+    echo "  ❌ Run this as your own user, not as root — these settings are per user."
+    exit 1
+fi
+
+echo ""
+echo "  🎨 Emoji Picker — setup"
+echo "  ───────────────────────"
+echo ""
+
+NEED_RELOGIN=false
+
+# ── /dev/uinput access ───────────────────────
+if id -nG | tr ' ' '\n' | grep -qx input; then
+    echo "  ✅ Already in group 'input'"
+else
+    echo "  🔧 Adding $USER to group 'input' (asks for sudo)..."
+    sudo usermod -aG input "$USER"
+    NEED_RELOGIN=true
+    echo "  ✅ Added"
+fi
+
+# ── ydotool service ──────────────────────────
+if systemctl --user is-active ydotool &>/dev/null; then
+    echo "  ✅ ydotool service already running"
+else
+    echo "  🔧 Enabling the ydotool service..."
+    systemctl --user enable --now ydotool 2>/dev/null || true
+    if systemctl --user is-active ydotool &>/dev/null; then
+        echo "  ✅ ydotool service running"
+    else
+        echo "  ⚠️  Could not start it yet."
+        if [ "$NEED_RELOGIN" = true ]; then
+            echo "     Expected — the group change isn't active in this session."
+        else
+            echo "     Check: systemctl --user status ydotool"
+        fi
+    fi
+fi
+
+echo ""
+if [ "$NEED_RELOGIN" = true ]; then
+    echo "  ⚠️  Log out and back in for the group change to take effect,"
+    echo "     then run 'emoji-picker-setup' again to finish."
+else
+    echo "  Done. Start it with 'emoji-picker', or bind it to a shortcut:"
+    echo "  System Settings → Keyboard → Shortcuts → + Add New → Command"
+fi
+echo ""

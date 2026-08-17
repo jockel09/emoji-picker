@@ -1,0 +1,23 @@
+#!/bin/sh
+# The two remaining setup steps are per user: group membership and a systemd
+# user service. Neither can be done from here, because this runs as root and
+# for no particular user — so point at the helper instead.
+set -e
+
+case "$1" in
+    configure)
+        cat <<'EOF'
+
+  Emoji Picker installed. One step left, as your own user (not root):
+
+      emoji-picker-setup
+
+  It adds you to the 'input' group and starts the ydotool service, which
+  direct insertion needs. Until then, picking an emoji only copies it to
+  the clipboard.
+
+EOF
+        ;;
+esac
+
+exit 0

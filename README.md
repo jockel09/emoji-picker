@@ -34,6 +34,19 @@ The install script handles all dependencies automatically.
 
 ## Installation
 
+### Debian / Ubuntu package
+
+The simplest route. Download `emoji-picker_<version>_all.deb` from the [releases page](https://github.com/jockel09/emoji-picker/releases):
+
+```bash
+sudo apt install ./emoji-picker_1.3.0_all.deb
+emoji-picker-setup
+```
+
+`apt` pulls in every dependency. `emoji-picker-setup` then does the two things a package can't do for you, because they belong to your user account and not to the system: it adds you to the `input` group (needed for `/dev/uinput`) and starts the `ydotool` service. Run it as yourself, not with `sudo`. It is safe to run again at any time.
+
+Build it yourself with `./build-deb.sh` — the version comes from the latest git tag, and the result lands in `dist/`.
+
 ### With git
 
 ```bash
@@ -43,7 +56,7 @@ chmod +x install.sh
 ./install.sh
 ```
 
-### Without git
+### From a source archive, without git
 
 Every release ships a source archive. Pick the version you want from the [releases page](https://github.com/jockel09/emoji-picker/releases) — the tarball extracts into a directory without the leading `v`:
 
@@ -54,7 +67,9 @@ chmod +x install.sh
 ./install.sh
 ```
 
-### What the installer does
+### What install.sh does
+
+Unlike the package, the script runs as you, so it handles the per-user setup itself.
 
 1. Check and install missing packages (`python3-pyqt6`, `python3-cairo`, `python3-gi`, `wl-clipboard`, the Noto colour emoji font)
 2. Install `ydotool` and set it up (user service + input group)

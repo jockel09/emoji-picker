@@ -1,0 +1,4 @@
+#!/bin/sh
+# Python puts the script's own directory on sys.path, and the picker resolves
+# its locales relative to __file__, so no working directory juggling needed.
+exec python3 /usr/share/emoji-picker/emoji_picker.py "$@"

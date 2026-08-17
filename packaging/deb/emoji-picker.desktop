@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Emoji Picker
+Comment=Fast emoji picker for KDE Plasma / Wayland
+Exec=/usr/bin/emoji-picker
+Icon=face-smile
+Terminal=false
+Categories=Utility;
+Keywords=emoji;smiley;unicode;emoticon;
+StartupNotify=false
+SingleMainWindow=true
