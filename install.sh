@@ -25,29 +25,37 @@ if [ "$XDG_SESSION_TYPE" != "wayland" ]; then
 fi
 
 # ── 2. Detect package manager ────────────────
+PKG_YDOTOOL="ydotool"
+PKG_WLCLIP="wl-clipboard"
+
 if command -v apt &>/dev/null; then
     PKG_MANAGER="apt"
     PKG_PYQT6="python3-pyqt6"
     PKG_CAIRO="python3-cairo"
     PKG_GI="gir1.2-pango-1.0 python3-gi python3-gi-cairo"
-    PKG_YDOTOOL="ydotool"
-    PKG_WLCLIP="wl-clipboard"
 elif command -v dnf &>/dev/null; then
     PKG_MANAGER="dnf"
     PKG_PYQT6="python3-pyqt6"
     PKG_CAIRO="python3-cairo"
     PKG_GI="python3-gobject3"
-    PKG_YDOTOOL="ydotool"
-    PKG_WLCLIP="wl-clipboard"
+elif command -v pacman &>/dev/null; then
+    PKG_MANAGER="pacman"
+    PKG_PYQT6="python-pyqt6"
+    PKG_CAIRO="python-cairo"
+    PKG_GI="python-gobject pango"
 else
-    echo "  ❌ No supported package manager found (apt/dnf)."
+    echo "  ❌ No supported package manager found (apt/dnf/pacman)."
     echo "  Please install dependencies manually:"
     echo "  python3-pyqt6, python3-cairo, python3-gi, ydotool, wl-clipboard"
     exit 1
 fi
 
 pkg_install() {
-    sudo "$PKG_MANAGER" install -y "$@"
+    if [ "$PKG_MANAGER" = "pacman" ]; then
+        sudo pacman -S --needed --noconfirm "$@"
+    else
+        sudo "$PKG_MANAGER" install -y "$@"
+    fi
 }
 
 echo "  📦 Package manager: $PKG_MANAGER"
