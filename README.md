@@ -43,7 +43,9 @@ sudo apt install ./emoji-picker_1.3.0_all.deb
 emoji-picker-setup
 ```
 
-`apt` pulls in every dependency. `emoji-picker-setup` then does the two things a package can't do for you, because they belong to your user account and not to the system: it adds you to the `input` group (needed for `/dev/uinput`) and starts the `ydotool` service. Run it as yourself, not with `sudo`. It is safe to run again at any time.
+`apt` pulls in every dependency, including `ydotool`, whose own package enables its user service for you.
+
+What no package can arrange is your **group membership**: direct insertion writes to `/dev/uinput`, which udev grants to group `input`. That's what `emoji-picker-setup` is for. Run it as yourself, not with `sudo`; it is safe to run again at any time, and it tells you when a re-login is needed. After that re-login the `ydotool` service starts on its own.
 
 Build it yourself with `./build-deb.sh` — the version comes from the latest git tag, and the result lands in `dist/`.
 

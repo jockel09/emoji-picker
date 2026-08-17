@@ -2,9 +2,13 @@
 # ─────────────────────────────────────────────
 # Emoji Picker — per-user setup
 #
-# Direct insertion writes to /dev/uinput, which udev grants to group 'input',
-# and drives it through the ydotool service, which runs per user. Both are
-# tied to your account, so a package install can't do them for you.
+# Direct insertion writes to /dev/uinput, which udev grants to group 'input'.
+# That membership belongs to your account, so no package install can arrange
+# it for you.
+#
+# The ydotool service is already enabled system-wide by the ydotool package
+# itself, so it starts on its own at your next login. Starting it here just
+# saves the wait when you are in the group already.
 # ─────────────────────────────────────────────
 set -e
 
