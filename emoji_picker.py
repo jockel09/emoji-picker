@@ -92,6 +92,43 @@ def render_emoji_pixmap(emoji, size=32):
     _emoji_pixmap_cache[(emoji, size)] = pixmap
     return pixmap
 
+
+def render_run_pixmap(text, height=20):
+    """Render a run of emojis to a QPixmap as wide as it needs to be.
+
+    render_emoji_pixmap() centers a single emoji in a square; a row of them
+    needs the width measured first. Not cached — the content changes with
+    every pick."""
+    import io
+
+    font_desc = Pango.FontDescription(f"Noto Color Emoji {int(height * 0.65)}")
+
+    def layout_for(ctx):
+        layout = PangoCairo.create_layout(ctx)
+        layout.set_font_description(font_desc)
+        layout.set_text(text, -1)
+        return layout
+
+    # Measure on a throwaway surface to get the width
+    measure = layout_for(cairo.Context(cairo.ImageSurface(cairo.FORMAT_ARGB32, 1, 1)))
+    _, logical = measure.get_pixel_extents()
+    width = max(1, logical.width + 2)
+
+    surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, height)
+    ctx = cairo.Context(surface)
+    layout = layout_for(ctx)
+    _, logical = layout.get_pixel_extents()
+    ctx.move_to(1 - logical.x, (height - logical.height) / 2 - logical.y)
+    PangoCairo.show_layout(ctx, layout)
+    surface.flush()
+
+    buf = io.BytesIO()
+    surface.write_to_png(buf)
+    pixmap = QPixmap()
+    pixmap.loadFromData(buf.getvalue(), "PNG")
+    return pixmap
+
+
 CONFIG_DIR = Path.home() / ".config" / "emoji-picker"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 KAOMOJI_FILE = CONFIG_DIR / "kaomoji.json"
@@ -368,6 +405,7 @@ class EmojiButton(QToolButton):
     emoji_selected = pyqtSignal(str)
     emoji_fav_toggle = pyqtSignal(str)
     emoji_delete = pyqtSignal(str)
+    emoji_undo = pyqtSignal()
 
     def __init__(self, emoji, name="", kaomoji=False, parent=None):
         super().__init__(parent)
@@ -424,6 +462,8 @@ class EmojiButton(QToolButton):
             self.emoji_delete.emit(self.emoji)
         elif event.key() == Qt.Key.Key_F:
             self.emoji_fav_toggle.emit(self.emoji)
+        elif event.key() == Qt.Key.Key_Backspace:
+            self.emoji_undo.emit()
         else:
             super().keyPressEvent(event)
 
@@ -473,6 +513,7 @@ class EmojiGrid(QWidget):
     emoji_fav_toggle = pyqtSignal(str)
     emoji_delete = pyqtSignal(str)
     emoji_move = pyqtSignal(str, int)  # emoji, direction (-1 or +1)
+    emoji_undo = pyqtSignal()
 
     def __init__(self, columns=9, parent=None):
         super().__init__(parent)
@@ -507,6 +548,7 @@ class EmojiGrid(QWidget):
             btn.emoji_selected.connect(self.emoji_selected.emit)
             btn.emoji_fav_toggle.connect(self.emoji_fav_toggle.emit)
             btn.emoji_delete.connect(self.emoji_delete.emit)
+            btn.emoji_undo.connect(self.emoji_undo.emit)
             btn.installEventFilter(self)
             if is_kao and not kaomoji:
                 self.layout_.addWidget(btn, row, col)
@@ -576,6 +618,16 @@ class EmojiPicker(QWidget):
         self.locale = load_locale(self.config.get("language", "en"))
         self.current_category = None
         self._inserting = False
+        # Emojis picked so far when close_on_select is off — inserted as one
+        # string when the picker closes
+        self._pending = []
+        self._flushing = False
+        # True once something was picked with Shift held. Releasing Shift only
+        # inserts if this is set, so a Shift press for a capital letter in the
+        # search field can't end a collection that Shift never started.
+        self._shift_collecting = False
+        # Status text to restore when the collected emojis are taken back
+        self._base_status = ""
 
         # Debounce timer for search
         self._search_timer = QTimer()
@@ -754,11 +806,22 @@ class EmojiPicker(QWidget):
         self.emoji_grid.emoji_fav_toggle.connect(self.on_fav_toggle)
         self.emoji_grid.emoji_delete.connect(self.on_remove_recent)
         self.emoji_grid.emoji_move.connect(self.on_move_favorite)
+        self.emoji_grid.emoji_undo.connect(self._undo_collected)
         self.scroll.setWidget(self.emoji_grid)
         self.emoji_grid.scroll_area = self.scroll
         layout.addWidget(self.scroll)
 
-        # Status bar
+        # Status bar — collected emojis are rendered as a pixmap, because a
+        # QLabel would fall back to Qt's text engine and show boxes
+        status_row = QHBoxLayout()
+        status_row.setContentsMargins(0, 0, 0, 0)
+        status_row.setSpacing(6)
+
+        self.collect_preview = QLabel()
+        self.collect_preview.setStyleSheet("QLabel { padding: 2px 0px 2px 4px; }")
+        self.collect_preview.hide()
+        status_row.addWidget(self.collect_preview)
+
         self.status = QLabel("")
         self.status.setStyleSheet("""
             QLabel {
@@ -767,7 +830,12 @@ class EmojiPicker(QWidget):
                 padding: 2px 4px;
             }
         """)
-        layout.addWidget(self.status)
+        status_row.addWidget(self.status)
+        status_row.addStretch()
+        layout.addLayout(status_row)
+
+        # See eventFilter — Shift releases have to be caught wherever focus is
+        QApplication.instance().installEventFilter(self)
 
         # Center on screen
         self.center_on_screen()
@@ -856,6 +924,8 @@ class EmojiPicker(QWidget):
             self.emoji_grid.set_emojis(self._apply_modifiers(emojis))
             self.status.setText(t(self.locale, "status_emojis", n=len(emojis)))
 
+        self._base_status = self.status.text()
+        self._show_collect_status()
         self.scroll.verticalScrollBar().setValue(0)
 
     def on_search(self, text):
@@ -906,6 +976,8 @@ class EmojiPicker(QWidget):
         self.emoji_grid.set_emojis(self._apply_modifiers(results), kaomoji_set=self._kaomoji_set())
         key = "status_results_plural" if len(results) != 1 else "status_results"
         self.status.setText(t(self.locale, key, n=len(results)))
+        self._base_status = self.status.text()
+        self._show_collect_status()
         self.scroll.verticalScrollBar().setValue(0)
 
     def on_emoji_selected(self, emoji):
@@ -916,22 +988,70 @@ class EmojiPicker(QWidget):
         recent.insert(0, emoji)
         save_recent(recent[:self.config.get("max_recent", 36)])
 
+        self._pending.append(emoji)
+
+        # Hold Shift to keep picking, let go to insert. close_on_select=false
+        # collects every pick instead, and is finished with Escape.
+        shift = bool(QApplication.keyboardModifiers() & Qt.KeyboardModifier.ShiftModifier)
+        if shift:
+            self._shift_collecting = True
+        if shift or not self.config.get("close_on_select", True):
+            self._show_collect_status()
+            return
+
+        # Insert everything collected so far, including this pick, and close.
+        # Inserting per pick would mean hiding and reshowing the window every
+        # time, because the simulated Ctrl+V always goes to the focused window.
+        self._flushing = True
         # Flag to prevent focus-loss handler from killing the app
         self._inserting = True
+        self.hide()
+        # 300ms delay for Wayland compositor to refocus previous window
+        QTimer.singleShot(300, self._flush_pending)
 
-        # Close first, then insert (so the target window gets focus back)
-        if self.config.get("close_on_select", True):
+    def _show_collect_status(self):
+        """Show the collected emojis next to a short hint."""
+        if not self._pending:
+            self.collect_preview.clear()
+            self.collect_preview.hide()
+            return
+        shown = self._pending[-12:]
+        text = ("… " if len(self._pending) > 12 else "") + "".join(shown)
+        self.collect_preview.setPixmap(render_run_pixmap(text, 20))
+        self.collect_preview.show()
+        key = "status_collected_shift" if self._shift_collecting else "status_collected"
+        self.status.setText(t(self.locale, key))
+
+    def _undo_collected(self):
+        """Drop the last collected emoji. Returns False if there was none."""
+        if not self._pending:
+            return False
+        self._pending.pop()
+        self._show_collect_status()
+        if not self._pending:
+            # Restore the plain status instead of rebuilding the grid — a rebuild
+            # would delete the button whose key event we're handling, and would
+            # clear an active search
+            self.status.setText(self._base_status)
+        return True
+
+    def closeEvent(self, event):
+        """Insert everything collected before the window goes away."""
+        if self._pending and not self._flushing:
+            self._flushing = True
+            # Suppress the focus-loss close while we step aside to insert
+            self._inserting = True
+            event.ignore()
             self.hide()
             # 300ms delay for Wayland compositor to refocus previous window
-            QTimer.singleShot(300, lambda: self._do_insert(emoji))
-        else:
-            self._do_insert(emoji)
+            QTimer.singleShot(300, self._flush_pending)
+            return
+        super().closeEvent(event)
 
-    def _do_insert(self, emoji):
-        method = self.config.get("insert_method", "wtype")
-        insert_emoji(emoji, method)
-        if self.config.get("close_on_select", True):
-            QApplication.quit()
+    def _flush_pending(self):
+        insert_emoji("".join(self._pending), self.config.get("insert_method", "wtype"))
+        self._pending = []
+        QApplication.quit()
 
     def on_fav_toggle(self, emoji):
         favs = self.config.get("favorites", [])
@@ -972,6 +1092,14 @@ class EmojiPicker(QWidget):
         super().focusOutEvent(event)
 
     def eventFilter(self, obj, event):
+        # Letting go of Shift finishes a collection and inserts it. Watched
+        # application-wide because the release goes to whichever widget has
+        # focus — the search field, an emoji button, or nothing at all.
+        if event.type() == QEvent.Type.KeyRelease and event.key() == Qt.Key.Key_Shift:
+            if self._shift_collecting and self._pending and not self._flushing:
+                self.close()  # closeEvent inserts what was collected
+                return True
+
         if obj is self.search and event.type() == QEvent.Type.KeyPress:
             if event.modifiers() & Qt.KeyboardModifier.ControlModifier and not self.search.text():
                 if event.key() == Qt.Key.Key_Left:
@@ -979,6 +1107,10 @@ class EmojiPicker(QWidget):
                     return True
                 elif event.key() == Qt.Key.Key_Right:
                     self._switch_category(1)
+                    return True
+            # Backspace in an empty search field takes back the last pick
+            if event.key() == Qt.Key.Key_Backspace and not self.search.text():
+                if self._undo_collected():
                     return True
         return super().eventFilter(obj, event)
 
