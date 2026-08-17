@@ -10,7 +10,7 @@ Built because the default KDE emoji picker can't directly insert emojis under Wa
 
 - ✅ **Direct insertion** — emojis are pasted directly into the focused window (via `ydotool`)
 - ✅ **Auto-close** — closes after selecting an emoji
-- ✅ **Multi-insert** — optionally collect several emojis and insert them in one go
+- ✅ **Multi-insert** — hold `Shift` to collect several emojis and insert them in one go
 - ✅ **Categories** — Smileys, People, Animals, Food, Travel, Activities, Objects, Symbols, Flags
 - ✅ **Favorites** — right-click any emoji to add/remove as favorite
 - ✅ **Recently used** — automatically tracked
@@ -64,6 +64,7 @@ Set up a global shortcut in KDE:
 | Action | Description |
 |---|---|
 | **Click** an emoji | Insert it directly into the focused app |
+| **Shift+click** an emoji | Collect it and keep picking — see [multi-insert](#inserting-several-emojis-at-once) |
 | **Right-click** an emoji | Toggle favorite ⭐ |
 | **Type** in search | Filter by name (German + English) |
 | **Escape** | Close the picker (inserts collected emojis in multi-insert mode) |
@@ -76,11 +77,12 @@ Set up a global shortcut in KDE:
 | `Tab` | Jump from search field to emoji grid |
 | `Arrow keys` | Navigate within the emoji grid |
 | `Enter` / `Space` | Insert the focused emoji |
+| `Shift+Enter` | Collect the focused emoji and keep picking |
 | `F` | Toggle favorite on focused emoji |
 | `Del` | Remove focused emoji from Recents or Favorites |
 | `Ctrl+←` / `Ctrl+→` | Switch category (also works in empty search field) |
 | `Alt+←` / `Alt+→` | Move focused emoji left/right within Favorites |
-| `Backspace` | Take back the last collected emoji (multi-insert mode only) |
+| `Backspace` | Take back the last collected emoji (empty search field) |
 
 ### Search examples
 
@@ -120,15 +122,19 @@ To use German, set `"language": "de"`. Custom languages can be added by creating
 
 ### Inserting several emojis at once
 
-Set `"close_on_select": false` to turn on multi-insert:
+Hold `Shift` while picking. No configuration needed:
 
-1. Click (or `Enter`) as many emojis as you like — the picker stays open and collects them. The status line shows what you have so far.
+1. **Shift+click** (or `Shift+Enter`) as many emojis as you like — the picker stays open and shows them at the bottom.
 2. `Backspace` takes back the last one, as long as the search field is empty.
-3. `Escape`, or clicking outside, inserts everything as a single string and closes the picker.
+3. Finish in either of two ways:
+   - **Click one more emoji without Shift** — it is appended and everything is inserted at once.
+   - **`Escape`, or click outside** — inserts what you collected.
 
-Nothing is inserted until you close it. That's deliberate: under Wayland the simulated `Ctrl+V` always lands in whichever window has focus, so the picker would have to hide and reappear for every single emoji. Collecting first means it steps aside exactly once.
+You can let go of `Shift` in between; it only matters at the moment you pick. That way you can search or switch categories between picks without losing the collection.
 
-With the default `"close_on_select": true` the picker inserts immediately and closes, as before.
+Nothing is inserted until you finish. That's deliberate: under Wayland the simulated `Ctrl+V` always lands in whichever window has focus, so the picker would have to hide and reappear for every single emoji. Collecting first means it steps aside exactly once.
+
+Set `"close_on_select": false` to make collecting the default — then every pick collects and you don't need `Shift` at all. `Escape` or clicking outside inserts everything.
 
 ### Theme
 

@@ -26,7 +26,7 @@
   "status_emojis": "{n} emojis  •  Right-click/F = favorite",
   "status_results": "{n} result",
   "status_results_plural": "{n} results",
-  "status_collected": "{emojis}  •  {n} collected  •  Backspace = undo, Esc = insert",
+  "status_collected": "Backspace = undo  •  Esc = insert all",
   "fav_added": "Added to favorites ⭐",
   "fav_removed": "Removed from favorites"
 }

@@ -92,6 +92,43 @@ def render_emoji_pixmap(emoji, size=32):
     _emoji_pixmap_cache[(emoji, size)] = pixmap
     return pixmap
 
+
+def render_run_pixmap(text, height=20):
+    """Render a run of emojis to a QPixmap as wide as it needs to be.
+
+    render_emoji_pixmap() centers a single emoji in a square; a row of them
+    needs the width measured first. Not cached — the content changes with
+    every pick."""
+    import io
+
+    font_desc = Pango.FontDescription(f"Noto Color Emoji {int(height * 0.65)}")
+
+    def layout_for(ctx):
+        layout = PangoCairo.create_layout(ctx)
+        layout.set_font_description(font_desc)
+        layout.set_text(text, -1)
+        return layout
+
+    # Measure on a throwaway surface to get the width
+    measure = layout_for(cairo.Context(cairo.ImageSurface(cairo.FORMAT_ARGB32, 1, 1)))
+    _, logical = measure.get_pixel_extents()
+    width = max(1, logical.width + 2)
+
+    surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, height)
+    ctx = cairo.Context(surface)
+    layout = layout_for(ctx)
+    _, logical = layout.get_pixel_extents()
+    ctx.move_to(1 - logical.x, (height - logical.height) / 2 - logical.y)
+    PangoCairo.show_layout(ctx, layout)
+    surface.flush()
+
+    buf = io.BytesIO()
+    surface.write_to_png(buf)
+    pixmap = QPixmap()
+    pixmap.loadFromData(buf.getvalue(), "PNG")
+    return pixmap
+
+
 CONFIG_DIR = Path.home() / ".config" / "emoji-picker"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 KAOMOJI_FILE = CONFIG_DIR / "kaomoji.json"
@@ -770,7 +807,17 @@ class EmojiPicker(QWidget):
         self.emoji_grid.scroll_area = self.scroll
         layout.addWidget(self.scroll)
 
-        # Status bar
+        # Status bar — collected emojis are rendered as a pixmap, because a
+        # QLabel would fall back to Qt's text engine and show boxes
+        status_row = QHBoxLayout()
+        status_row.setContentsMargins(0, 0, 0, 0)
+        status_row.setSpacing(6)
+
+        self.collect_preview = QLabel()
+        self.collect_preview.setStyleSheet("QLabel { padding: 2px 0px 2px 4px; }")
+        self.collect_preview.hide()
+        status_row.addWidget(self.collect_preview)
+
         self.status = QLabel("")
         self.status.setStyleSheet("""
             QLabel {
@@ -779,7 +826,9 @@ class EmojiPicker(QWidget):
                 padding: 2px 4px;
             }
         """)
-        layout.addWidget(self.status)
+        status_row.addWidget(self.status)
+        status_row.addStretch()
+        layout.addLayout(status_row)
 
         # Center on screen
         self.center_on_screen()
@@ -932,44 +981,44 @@ class EmojiPicker(QWidget):
         recent.insert(0, emoji)
         save_recent(recent[:self.config.get("max_recent", 36)])
 
-        # Collect mode: keep the picker open and insert everything at the end.
-        # Inserting per click would mean hiding and reshowing the window every
-        # time, because the simulated Ctrl+V always goes to the focused window.
-        if not self.config.get("close_on_select", True):
-            self._pending.append(emoji)
+        self._pending.append(emoji)
+
+        # Hold Shift to keep picking. close_on_select=false makes that the
+        # default, so every pick collects without holding anything.
+        shift = bool(QApplication.keyboardModifiers() & Qt.KeyboardModifier.ShiftModifier)
+        if shift or not self.config.get("close_on_select", True):
             self._show_collect_status()
             return
 
+        # Insert everything collected so far, including this pick, and close.
+        # Inserting per pick would mean hiding and reshowing the window every
+        # time, because the simulated Ctrl+V always goes to the focused window.
+        self._flushing = True
         # Flag to prevent focus-loss handler from killing the app
         self._inserting = True
-
-        # Close first, then insert (so the target window gets focus back)
         self.hide()
         # 300ms delay for Wayland compositor to refocus previous window
-        QTimer.singleShot(300, lambda: self._do_insert(emoji))
-
-    def _do_insert(self, emoji):
-        method = self.config.get("insert_method", "wtype")
-        insert_emoji(emoji, method)
-        QApplication.quit()
+        QTimer.singleShot(300, self._flush_pending)
 
     def _show_collect_status(self):
-        """Replace the status line with the emojis collected so far, if any."""
+        """Show the collected emojis next to a short hint."""
         if not self._pending:
+            self.collect_preview.clear()
+            self.collect_preview.hide()
             return
         shown = self._pending[-12:]
-        text = ("…" if len(self._pending) > 12 else "") + "".join(shown)
-        self.status.setText(t(self.locale, "status_collected",
-                              n=len(self._pending), emojis=text))
+        text = ("… " if len(self._pending) > 12 else "") + "".join(shown)
+        self.collect_preview.setPixmap(render_run_pixmap(text, 20))
+        self.collect_preview.show()
+        self.status.setText(t(self.locale, "status_collected"))
 
     def _undo_collected(self):
         """Drop the last collected emoji. Returns False if there was none."""
         if not self._pending:
             return False
         self._pending.pop()
-        if self._pending:
-            self._show_collect_status()
-        else:
+        self._show_collect_status()
+        if not self._pending:
             # Restore the plain status instead of rebuilding the grid — a rebuild
             # would delete the button whose key event we're handling, and would
             # clear an active search
