@@ -56,13 +56,23 @@ chmod +x install.sh
 
 ### What the installer does
 
-1. Check and install missing packages (`python3-pyqt6`, `python3-cairo`, `python3-gi`, `ydotool`, `wl-clipboard`)
-2. Set up `ydotool` (user service + input group)
+1. Check and install missing packages (`python3-pyqt6`, `python3-cairo`, `python3-gi`, `wl-clipboard`, the Noto colour emoji font)
+2. Install `ydotool` and set it up (user service + input group)
 3. Install the picker to `~/.local/share/emoji-picker/`
 4. Create a launcher at `~/.local/bin/emoji-picker`
 5. Add a `.desktop` file
 
-> **Note:** If you were added to the `input` group during installation, you need to **log out and back in** for `ydotool` to work.
+> **Note:** If you were added to the `input` group during installation, you need to **log out and back in** for direct insertion to work.
+
+> **Debian users:** `ydotool` is only in **backports**, so a stock Debian 13 doesn't have it. The installer says so and finishes anyway — the picker then copies to the clipboard instead of inserting. To get direct insertion:
+>
+> ```bash
+> echo 'deb http://deb.debian.org/debian trixie-backports main' \
+>   | sudo tee /etc/apt/sources.list.d/backports.list
+> sudo apt update && sudo apt install ydotool
+> ```
+>
+> Then run `./install.sh` again.
 
 ## Keyboard Shortcut
 

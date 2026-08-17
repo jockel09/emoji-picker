@@ -27,12 +27,16 @@ fi
 # ── 2. Detect package manager ────────────────
 PKG_YDOTOOL="ydotool"
 PKG_WLCLIP="wl-clipboard"
+# Package name of the color emoji font, only where it is known for certain.
+# Empty means: point it out rather than guess a name that may not exist.
+PKG_EMOJIFONT=""
 
 if command -v apt &>/dev/null; then
     PKG_MANAGER="apt"
     PKG_PYQT6="python3-pyqt6"
     PKG_CAIRO="python3-cairo"
     PKG_GI="gir1.2-pango-1.0 python3-gi python3-gi-cairo"
+    PKG_EMOJIFONT="fonts-noto-color-emoji"
 elif command -v dnf &>/dev/null; then
     PKG_MANAGER="dnf"
     PKG_PYQT6="python3-pyqt6"
@@ -77,12 +81,19 @@ if ! python3 -c "import gi; gi.require_version('Pango','1.0'); gi.require_versio
     MISSING+=($PKG_GI)
 fi
 
-if ! command -v ydotool &>/dev/null; then
-    MISSING+=("$PKG_YDOTOOL")
-fi
-
 if ! command -v wl-copy &>/dev/null; then
     MISSING+=("$PKG_WLCLIP")
+fi
+
+# The renderer asks Pango for "Noto Color Emoji" by name. Without that font
+# every emoji comes out as a box, with nothing explaining why.
+FONT_MISSING=false
+if command -v fc-list &>/dev/null && ! fc-list 2>/dev/null | grep -qi "Noto Color Emoji"; then
+    if [ -n "$PKG_EMOJIFONT" ]; then
+        MISSING+=("$PKG_EMOJIFONT")
+    else
+        FONT_MISSING=true
+    fi
 fi
 
 if [ ${#MISSING[@]} -gt 0 ]; then
@@ -99,32 +110,80 @@ fi
 
 echo "  ✅ All dependencies satisfied"
 
-# ── 4. Setup ydotool ─────────────────────────
+if [ "$FONT_MISSING" = true ]; then
+    echo "  ⚠️  No 'Noto Color Emoji' font found — emojis will render as boxes."
+    echo "     Install your distro's Noto colour emoji font package."
+fi
+
+# ── 4. Keyboard simulation ───────────────────
+# Deliberately separate from the block above: on Debian ydotool only exists in
+# backports, so installing it can fail. That must not take the rest down with
+# it — the picker still runs and falls back to copying to the clipboard.
 echo ""
-echo "  🔧 Configuring ydotool..."
+
+YDOTOOL_OK=true
+if command -v ydotool &>/dev/null; then
+    echo "  ✅ ydotool present"
+else
+    echo "  📦 ydotool is missing — it is what inserts emojis directly."
+    read -p "  Install it now? [Y/n] " answer
+    if [[ "$answer" != "n" && "$answer" != "N" ]]; then
+        if pkg_install "$PKG_YDOTOOL"; then
+            echo "  ✅ ydotool installed"
+        else
+            YDOTOOL_OK=false
+        fi
+    else
+        YDOTOOL_OK=false
+    fi
+fi
+
+if [ "$YDOTOOL_OK" = false ]; then
+    echo ""
+    echo "  ⚠️  Continuing without ydotool. The picker will work, but emojis"
+    echo "     are only copied to the clipboard, not inserted."
+    if [ "$PKG_MANAGER" = "apt" ]; then
+        echo ""
+        echo "     On Debian ydotool lives in backports:"
+        echo "       echo 'deb http://deb.debian.org/debian trixie-backports main' \\"
+        echo "         | sudo tee /etc/apt/sources.list.d/backports.list"
+        echo "       sudo apt update && sudo apt install ydotool"
+    fi
+    echo ""
+    echo "     Afterwards, re-run this script to finish the setup."
+fi
+
+# ── 5. Configure ydotool ─────────────────────
+echo ""
+echo "  🔧 Configuring input access..."
 
 NEED_RELOGIN=false
 
-# Add user to input group if needed
+# Both the daemon and any later ydotool install need /dev/uinput, which udev
+# grants to group 'input' — so do this even if ydotool isn't here yet
 if ! groups "$USER" | grep -qw input; then
     echo "  Adding $USER to group 'input'..."
     sudo usermod -aG input "$USER"
     NEED_RELOGIN=true
 fi
 
-# Enable ydotool user service
-if ! systemctl --user is-enabled ydotool &>/dev/null; then
-    systemctl --user enable ydotool 2>/dev/null || true
+if [ "$YDOTOOL_OK" = true ]; then
+    # Enable ydotool user service
+    if ! systemctl --user is-enabled ydotool &>/dev/null; then
+        systemctl --user enable ydotool 2>/dev/null || true
+    fi
+
+    # Start ydotool if not running
+    if ! systemctl --user is-active ydotool &>/dev/null; then
+        systemctl --user start ydotool 2>/dev/null || true
+    fi
+
+    echo "  ✅ ydotool configured"
+else
+    echo "  ✅ Group set up; ydotool can be added later"
 fi
 
-# Start ydotool if not running
-if ! systemctl --user is-active ydotool &>/dev/null; then
-    systemctl --user start ydotool 2>/dev/null || true
-fi
-
-echo "  ✅ ydotool configured"
-
-# ── 5. Install files ─────────────────────────
+# ── 6. Install files ─────────────────────────
 echo ""
 echo "  📁 Installing files..."
 
@@ -160,7 +219,7 @@ DESKTOP
 
 echo "  ✅ Files installed"
 
-# ── 6. Check PATH ────────────────────────────
+# ── 7. Check PATH ────────────────────────────
 if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
     echo ""
     echo "  ⚠️  $BIN_DIR is not in your PATH."
@@ -170,7 +229,7 @@ if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
     echo ""
 fi
 
-# ── 7. Done ──────────────────────────────────
+# ── 8. Done ──────────────────────────────────
 echo ""
 echo "  ════════════════════════════════════════"
 echo "  ✅ Emoji Picker installed successfully!"
@@ -189,7 +248,12 @@ echo ""
 
 if [ "$NEED_RELOGIN" = true ]; then
     echo "  ⚠️  IMPORTANT: You were added to the 'input' group."
-    echo "  Please log out and back in for ydotool"
-    echo "  (direct emoji insertion) to work."
+    echo "  Please log out and back in for direct emoji insertion to work."
+    echo ""
+fi
+
+if [ "$YDOTOOL_OK" = false ]; then
+    echo "  ⚠️  Without ydotool the picker only copies to the clipboard."
+    echo "  See the instructions further up to install it."
     echo ""
 fi
