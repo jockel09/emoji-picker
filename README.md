@@ -1,6 +1,6 @@
 # 🎨 Emoji Picker
 
-A fast, KDE-styled emoji picker for **Wayland** (KDE Plasma 6) with direct insertion.
+A fast, KDE-styled emoji picker for **Wayland** (KDE Plasma 6) — ⚡ **with direct insertion**.
 
 Built because the default KDE emoji picker can't directly insert emojis under Wayland, doesn't auto-close after selection, and has no favorites.
 
@@ -34,6 +34,8 @@ The install script handles all dependencies automatically.
 
 ## Installation
 
+### With git
+
 ```bash
 git clone https://github.com/jockel09/emoji-picker.git
 cd emoji-picker
@@ -41,7 +43,19 @@ chmod +x install.sh
 ./install.sh
 ```
 
-The installer will:
+### Without git
+
+Every release ships a source archive. Pick the version you want from the [releases page](https://github.com/jockel09/emoji-picker/releases) — the tarball extracts into a directory without the leading `v`:
+
+```bash
+curl -L https://github.com/jockel09/emoji-picker/archive/refs/tags/v1.3.0.tar.gz | tar xz
+cd emoji-picker-1.3.0
+chmod +x install.sh
+./install.sh
+```
+
+### What the installer does
+
 1. Check and install missing packages (`python3-pyqt6`, `python3-cairo`, `python3-gi`, `ydotool`, `wl-clipboard`)
 2. Set up `ydotool` (user service + input group)
 3. Install the picker to `~/.local/share/emoji-picker/`
