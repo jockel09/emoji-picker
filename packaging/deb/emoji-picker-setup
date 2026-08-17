@@ -34,15 +34,29 @@ else
     echo "  ✅ Added"
 fi
 
-# ── ydotool service ──────────────────────────
-if systemctl --user is-active ydotool &>/dev/null; then
+# ── ydotool ──────────────────────────────────
+# Only in backports on Debian, so it is a Recommends and may be absent
+YDOTOOL_MISSING=false
+SERVICE_FAILED=false
+if ! command -v ydotool >/dev/null 2>&1; then
+    YDOTOOL_MISSING=true
+    echo "  ⚠️  ydotool is not installed — emojis will only be copied to the"
+    echo "     clipboard, not inserted. On Debian it lives in backports:"
+    echo ""
+    echo "       echo 'deb http://deb.debian.org/debian trixie-backports main' \\"
+    echo "         | sudo tee /etc/apt/sources.list.d/backports.list"
+    echo "       sudo apt update && sudo apt install ydotool"
+    echo ""
+    echo "     Then run 'emoji-picker-setup' again."
+elif systemctl --user is-active ydotool &>/dev/null; then
     echo "  ✅ ydotool service already running"
 else
-    echo "  🔧 Enabling the ydotool service..."
+    echo "  🔧 Starting the ydotool service..."
     systemctl --user enable --now ydotool 2>/dev/null || true
     if systemctl --user is-active ydotool &>/dev/null; then
         echo "  ✅ ydotool service running"
     else
+        SERVICE_FAILED=true
         echo "  ⚠️  Could not start it yet."
         if [ "$NEED_RELOGIN" = true ]; then
             echo "     Expected — the group change isn't active in this session."
@@ -56,6 +70,12 @@ echo ""
 if [ "$NEED_RELOGIN" = true ]; then
     echo "  ⚠️  Log out and back in for the group change to take effect,"
     echo "     then run 'emoji-picker-setup' again to finish."
+elif [ "$YDOTOOL_MISSING" = true ]; then
+    echo "  The picker works now, but only copies to the clipboard."
+    echo "  Install ydotool as shown above for direct insertion."
+elif [ "$SERVICE_FAILED" = true ]; then
+    echo "  The picker works, but insertion needs the ydotool service running."
+    echo "  Nothing else to set up once it is up."
 else
     echo "  Done. Start it with 'emoji-picker', or bind it to a shortcut:"
     echo "  System Settings → Keyboard → Shortcuts → + Add New → Command"
