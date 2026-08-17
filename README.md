@@ -45,17 +45,11 @@ emoji-picker-setup
 
 `apt` pulls in every dependency. Then run `emoji-picker-setup` **as yourself, not with `sudo`** — it adds you to the `input` group, which is what grants write access to `/dev/uinput`, and no package install can do that for you. It is safe to run again at any time and reports whatever is still missing.
 
-> **Debian users:** `ydotool` is only in **backports**, so a stock Debian 13 doesn't have it. The picker installs and runs either way, but without `ydotool` it can only copy to the clipboard. To get direct insertion:
+> **Debian users:** `ydotool` is only in **backports**, so a stock Debian 13 doesn't have it — which is why it is a `Recommends` and not a hard dependency: the package installs either way. `emoji-picker-setup` notices it is absent, says that enabling backports changes your package sources, and offers to do it. Decline and the picker still works, just copying to the clipboard; run the command again whenever you change your mind.
 >
-> ```bash
-> echo 'deb http://deb.debian.org/debian trixie-backports main' \
->   | sudo tee /etc/apt/sources.list.d/backports.list
-> sudo apt update && sudo apt install ydotool
-> ```
->
-> With backports already enabled, `apt` installs `ydotool` along with the package by itself. Its own package enables the user service, so after one re-login there is nothing left to do.
+> With backports already enabled, `apt` pulls `ydotool` in along with the package by itself.
 
-Build it yourself with `./build-deb.sh` — the version comes from the latest git tag, and the result lands in `dist/`.
+Build it yourself with `./build-deb.sh` — the version comes from the latest git tag, and the result lands in `dist/`. Pushing a `v*` tag builds it in CI and attaches it to the release automatically.
 
 ### With git
 

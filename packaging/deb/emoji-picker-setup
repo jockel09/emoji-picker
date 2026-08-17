@@ -24,6 +24,39 @@ echo ""
 
 NEED_RELOGIN=false
 
+# Offer to install ydotool, enabling Debian's backports first if that is the
+# only place it exists. Returns 0 once ydotool is installed.
+#
+# Availability is decided by asking apt to simulate the install, not by reading
+# the sources: no codename to hardcode, no locale to worry about. The backports
+# offer is limited to ID=debian, because writing Debian's backports into an
+# Ubuntu or Devuan sources list mixes distributions and breaks systems.
+install_ydotool() {
+    local id codename list
+    id=$(. /etc/os-release 2>/dev/null && echo "${ID:-}")
+    codename=$(. /etc/os-release 2>/dev/null && echo "${VERSION_CODENAME:-}")
+
+    if apt-get install -s ydotool &>/dev/null; then
+        read -p "  Install ydotool now? [Y/n] " answer
+        [[ "$answer" != "n" && "$answer" != "N" ]] || return 1
+    else
+        [ "$id" = "debian" ] && [ -n "$codename" ] || return 1
+        echo "     On Debian it only exists in ${codename}-backports."
+        echo "     Enabling it adds an apt source, so this changes your package"
+        echo "     management, not just this program."
+        read -p "  Enable ${codename}-backports and install ydotool? [Y/n] " answer
+        [[ "$answer" != "n" && "$answer" != "N" ]] || return 1
+
+        list="/etc/apt/sources.list.d/${codename}-backports.list"
+        echo "  🔧 Adding $list"
+        echo "deb http://deb.debian.org/debian ${codename}-backports main" \
+            | sudo tee "$list" >/dev/null
+        sudo apt-get update || return 1
+    fi
+
+    sudo apt-get install -y ydotool
+}
+
 # ── /dev/uinput access ───────────────────────
 if id -nG | tr ' ' '\n' | grep -qx input; then
     echo "  ✅ Already in group 'input'"
@@ -39,29 +72,30 @@ fi
 YDOTOOL_MISSING=false
 SERVICE_FAILED=false
 if ! command -v ydotool >/dev/null 2>&1; then
-    YDOTOOL_MISSING=true
-    echo "  ⚠️  ydotool is not installed — emojis will only be copied to the"
-    echo "     clipboard, not inserted. On Debian it lives in backports:"
-    echo ""
-    echo "       echo 'deb http://deb.debian.org/debian trixie-backports main' \\"
-    echo "         | sudo tee /etc/apt/sources.list.d/backports.list"
-    echo "       sudo apt update && sudo apt install ydotool"
-    echo ""
-    echo "     Then run 'emoji-picker-setup' again."
-elif systemctl --user is-active ydotool &>/dev/null; then
-    echo "  ✅ ydotool service already running"
-else
-    echo "  🔧 Starting the ydotool service..."
-    systemctl --user enable --now ydotool 2>/dev/null || true
-    if systemctl --user is-active ydotool &>/dev/null; then
-        echo "  ✅ ydotool service running"
+    echo "  ⚠️  ydotool is not installed — it is what inserts emojis directly."
+    if install_ydotool; then
+        echo "  ✅ ydotool installed"
     else
-        SERVICE_FAILED=true
-        echo "  ⚠️  Could not start it yet."
-        if [ "$NEED_RELOGIN" = true ]; then
-            echo "     Expected — the group change isn't active in this session."
+        YDOTOOL_MISSING=true
+    fi
+fi
+
+if [ "$YDOTOOL_MISSING" = false ]; then
+    if systemctl --user is-active ydotool &>/dev/null; then
+        echo "  ✅ ydotool service already running"
+    else
+        echo "  🔧 Starting the ydotool service..."
+        systemctl --user enable --now ydotool 2>/dev/null || true
+        if systemctl --user is-active ydotool &>/dev/null; then
+            echo "  ✅ ydotool service running"
         else
-            echo "     Check: systemctl --user status ydotool"
+            SERVICE_FAILED=true
+            echo "  ⚠️  Could not start it yet."
+            if [ "$NEED_RELOGIN" = true ]; then
+                echo "     Expected — the group change isn't active in this session."
+            else
+                echo "     Check: systemctl --user status ydotool"
+            fi
         fi
     fi
 fi
@@ -71,8 +105,8 @@ if [ "$NEED_RELOGIN" = true ]; then
     echo "  ⚠️  Log out and back in for the group change to take effect,"
     echo "     then run 'emoji-picker-setup' again to finish."
 elif [ "$YDOTOOL_MISSING" = true ]; then
-    echo "  The picker works now, but only copies to the clipboard."
-    echo "  Install ydotool as shown above for direct insertion."
+    echo "  The picker works, but only copies to the clipboard."
+    echo "  Run 'emoji-picker-setup' again whenever you want to add ydotool."
 elif [ "$SERVICE_FAILED" = true ]; then
     echo "  The picker works, but insertion needs the ydotool service running."
     echo "  Nothing else to set up once it is up."

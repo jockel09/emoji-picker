@@ -1,0 +1,49 @@
+name: Attach .deb to release
+
+# Runs when a version tag is pushed. Keeping this automatic is the point: a
+# package that has to be built and uploaded by hand gets forgotten at the next
+# release, and then the README points at a download that isn't there.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build package
+        # Pass the version explicitly — the script would otherwise read it from
+        # git describe, which needs the full history fetched
+        run: ./build-deb.sh "${GITHUB_REF_NAME#v}"
+
+      - name: Show what was built
+        run: |
+          dpkg-deb --info dist/*.deb
+          dpkg-deb --contents dist/*.deb
+
+      - name: Check it installs on a stock Debian
+        # No backports here, so this also proves ydotool stays optional
+        run: |
+          docker run --rm -v "$PWD/dist:/pkg:ro" debian:trixie sh -c '
+            apt-get update -qq
+            apt-get install -y /pkg/*.deb
+            test -x /usr/bin/emoji-picker
+            test -x /usr/bin/emoji-picker-setup
+          '
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Create the release as a draft if it doesn't exist yet, so pushing a
+          # tag never fails here and release notes stay yours to write
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
+            || gh release create "$GITHUB_REF_NAME" --draft --title "$GITHUB_REF_NAME" --generate-notes
+          gh release upload "$GITHUB_REF_NAME" dist/*.deb --clobber
