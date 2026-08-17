@@ -64,7 +64,7 @@ Set up a global shortcut in KDE:
 | Action | Description |
 |---|---|
 | **Click** an emoji | Insert it directly into the focused app |
-| **Shift+click** an emoji | Collect it and keep picking — see [multi-insert](#inserting-several-emojis-at-once) |
+| **Shift+click** emojis | Collect several, insert them all when you release `Shift` — see [multi-insert](#inserting-several-emojis-at-once) |
 | **Right-click** an emoji | Toggle favorite ⭐ |
 | **Type** in search | Filter by name (German + English) |
 | **Escape** | Close the picker (inserts collected emojis in multi-insert mode) |
@@ -77,7 +77,7 @@ Set up a global shortcut in KDE:
 | `Tab` | Jump from search field to emoji grid |
 | `Arrow keys` | Navigate within the emoji grid |
 | `Enter` / `Space` | Insert the focused emoji |
-| `Shift+Enter` | Collect the focused emoji and keep picking |
+| `Shift+Enter` | Collect the focused emoji; releasing `Shift` inserts the collection |
 | `F` | Toggle favorite on focused emoji |
 | `Del` | Remove focused emoji from Recents or Favorites |
 | `Ctrl+←` / `Ctrl+→` | Switch category (also works in empty search field) |
@@ -124,17 +124,17 @@ To use German, set `"language": "de"`. Custom languages can be added by creating
 
 Hold `Shift` while picking. No configuration needed:
 
-1. **Shift+click** (or `Shift+Enter`) as many emojis as you like — the picker stays open and shows them at the bottom.
+1. **Keep `Shift` held** and click (or press `Enter` on) as many emojis as you like. The picker stays open and shows the collection at the bottom.
 2. `Backspace` takes back the last one, as long as the search field is empty.
-3. Finish in either of two ways:
-   - **Click one more emoji without Shift** — it is appended and everything is inserted at once.
-   - **`Escape`, or click outside** — inserts what you collected.
+3. **Let go of `Shift`** — everything is inserted at once as a single string and the picker closes.
 
-You can let go of `Shift` in between; it only matters at the moment you pick. That way you can search or switch categories between picks without losing the collection.
+`Escape` or clicking outside also inserts the collection, and picking one more emoji without `Shift` appends it and finishes. So you are never stuck holding the key.
 
 Nothing is inserted until you finish. That's deliberate: under Wayland the simulated `Ctrl+V` always lands in whichever window has focus, so the picker would have to hide and reappear for every single emoji. Collecting first means it steps aside exactly once.
 
-Set `"close_on_select": false` to make collecting the default — then every pick collects and you don't need `Shift` at all. `Escape` or clicking outside inserts everything.
+A `Shift` press that didn't pick anything is ignored, so typing capital letters in the search field won't close the picker.
+
+Set `"close_on_select": false` to make collecting the default — then every pick collects, `Shift` isn't needed, and `Escape` or clicking outside inserts everything. In that mode releasing `Shift` does nothing, since it isn't what started the collection.
 
 ### Theme
 

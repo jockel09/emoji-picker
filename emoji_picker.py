@@ -622,6 +622,10 @@ class EmojiPicker(QWidget):
         # string when the picker closes
         self._pending = []
         self._flushing = False
+        # True once something was picked with Shift held. Releasing Shift only
+        # inserts if this is set, so a Shift press for a capital letter in the
+        # search field can't end a collection that Shift never started.
+        self._shift_collecting = False
         # Status text to restore when the collected emojis are taken back
         self._base_status = ""
 
@@ -830,6 +834,9 @@ class EmojiPicker(QWidget):
         status_row.addStretch()
         layout.addLayout(status_row)
 
+        # See eventFilter — Shift releases have to be caught wherever focus is
+        QApplication.instance().installEventFilter(self)
+
         # Center on screen
         self.center_on_screen()
 
@@ -983,9 +990,11 @@ class EmojiPicker(QWidget):
 
         self._pending.append(emoji)
 
-        # Hold Shift to keep picking. close_on_select=false makes that the
-        # default, so every pick collects without holding anything.
+        # Hold Shift to keep picking, let go to insert. close_on_select=false
+        # collects every pick instead, and is finished with Escape.
         shift = bool(QApplication.keyboardModifiers() & Qt.KeyboardModifier.ShiftModifier)
+        if shift:
+            self._shift_collecting = True
         if shift or not self.config.get("close_on_select", True):
             self._show_collect_status()
             return
@@ -1010,7 +1019,8 @@ class EmojiPicker(QWidget):
         text = ("… " if len(self._pending) > 12 else "") + "".join(shown)
         self.collect_preview.setPixmap(render_run_pixmap(text, 20))
         self.collect_preview.show()
-        self.status.setText(t(self.locale, "status_collected"))
+        key = "status_collected_shift" if self._shift_collecting else "status_collected"
+        self.status.setText(t(self.locale, key))
 
     def _undo_collected(self):
         """Drop the last collected emoji. Returns False if there was none."""
@@ -1082,6 +1092,14 @@ class EmojiPicker(QWidget):
         super().focusOutEvent(event)
 
     def eventFilter(self, obj, event):
+        # Letting go of Shift finishes a collection and inserts it. Watched
+        # application-wide because the release goes to whichever widget has
+        # focus — the search field, an emoji button, or nothing at all.
+        if event.type() == QEvent.Type.KeyRelease and event.key() == Qt.Key.Key_Shift:
+            if self._shift_collecting and self._pending and not self._flushing:
+                self.close()  # closeEvent inserts what was collected
+                return True
+
         if obj is self.search and event.type() == QEvent.Type.KeyPress:
             if event.modifiers() & Qt.KeyboardModifier.ControlModifier and not self.search.text():
                 if event.key() == Qt.Key.Key_Left:
