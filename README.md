@@ -64,15 +64,7 @@ chmod +x install.sh
 
 > **Note:** If you were added to the `input` group during installation, you need to **log out and back in** for direct insertion to work.
 
-> **Debian users:** `ydotool` is only in **backports**, so a stock Debian 13 doesn't have it. The installer says so and finishes anyway — the picker then copies to the clipboard instead of inserting. To get direct insertion:
->
-> ```bash
-> echo 'deb http://deb.debian.org/debian trixie-backports main' \
->   | sudo tee /etc/apt/sources.list.d/backports.list
-> sudo apt update && sudo apt install ydotool
-> ```
->
-> Then run `./install.sh` again.
+> **Debian users:** `ydotool` is only in **backports**, so a stock Debian 13 doesn't have it. The installer notices, tells you that enabling backports changes your package sources, and offers to do it. Decline and it finishes anyway — the picker then copies to the clipboard instead of inserting, and prints the commands to add `ydotool` later.
 
 ## Keyboard Shortcut
 

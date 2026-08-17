@@ -24,7 +24,15 @@ if [ "$XDG_SESSION_TYPE" != "wayland" ]; then
     fi
 fi
 
-# ── 2. Detect package manager ────────────────
+# ── 2. Detect distro and package manager ─────
+# ID distinguishes Debian proper from its derivatives; ID_LIKE would not.
+DEB_ID=""
+DEB_CODENAME=""
+if [ -r /etc/os-release ]; then
+    DEB_ID=$(. /etc/os-release && echo "${ID:-}")
+    DEB_CODENAME=$(. /etc/os-release && echo "${VERSION_CODENAME:-}")
+fi
+
 PKG_YDOTOOL="ydotool"
 PKG_WLCLIP="wl-clipboard"
 # Package name of the color emoji font, only where it is known for certain.
@@ -121,20 +129,63 @@ fi
 # it — the picker still runs and falls back to copying to the clipboard.
 echo ""
 
+install_ydotool() {
+    if pkg_install "$PKG_YDOTOOL"; then
+        echo "  ✅ ydotool installed"
+        return 0
+    fi
+    return 1
+}
+
+# Offer to enable Debian's backports, where ydotool lives. Returns 0 only if
+# ydotool is installable afterwards.
+enable_backports() {
+    local list
+    echo ""
+    echo "  📦 ydotool is not available from your configured package sources."
+    echo "     On Debian it only exists in ${DEB_CODENAME}-backports."
+    echo "     Enabling it adds an apt source, so this changes your package"
+    echo "     management, not just this install."
+    read -p "  Enable ${DEB_CODENAME}-backports and install ydotool? [Y/n] " answer
+    [[ "$answer" != "n" && "$answer" != "N" ]] || return 1
+
+    list="/etc/apt/sources.list.d/${DEB_CODENAME}-backports.list"
+    echo "  🔧 Adding $list"
+    echo "deb http://deb.debian.org/debian ${DEB_CODENAME}-backports main" \
+        | sudo tee "$list" >/dev/null
+    sudo apt-get update || return 1
+    apt-get install -s ydotool &>/dev/null
+}
+
 YDOTOOL_OK=true
+NEED_BACKPORTS=false
+
 if command -v ydotool &>/dev/null; then
     echo "  ✅ ydotool present"
 else
-    echo "  📦 ydotool is missing — it is what inserts emojis directly."
-    read -p "  Install it now? [Y/n] " answer
-    if [[ "$answer" != "n" && "$answer" != "N" ]]; then
-        if pkg_install "$PKG_YDOTOOL"; then
-            echo "  ✅ ydotool installed"
+    # Ask apt whether it could install ydotool at all, rather than guessing from
+    # the sources: this is locale-independent and needs no hardcoded codename.
+    # Only genuine Debian qualifies — putting Debian's backports on Ubuntu or a
+    # derivative mixes distributions and breaks systems.
+    if [ "$PKG_MANAGER" = "apt" ] && ! apt-get install -s ydotool &>/dev/null \
+       && [ "$DEB_ID" = "debian" ] && [ -n "$DEB_CODENAME" ]; then
+        NEED_BACKPORTS=true
+    fi
+
+    if [ "$NEED_BACKPORTS" = true ]; then
+        if enable_backports; then
+            install_ydotool || YDOTOOL_OK=false
         else
             YDOTOOL_OK=false
         fi
     else
-        YDOTOOL_OK=false
+        echo "  📦 ydotool is missing — it is what inserts emojis directly."
+        read -p "  Install it now? [Y/n] " answer
+        if [[ "$answer" != "n" && "$answer" != "N" ]]; then
+            install_ydotool || YDOTOOL_OK=false
+        else
+            YDOTOOL_OK=false
+        fi
     fi
 fi
 
@@ -142,11 +193,11 @@ if [ "$YDOTOOL_OK" = false ]; then
     echo ""
     echo "  ⚠️  Continuing without ydotool. The picker will work, but emojis"
     echo "     are only copied to the clipboard, not inserted."
-    if [ "$PKG_MANAGER" = "apt" ]; then
+    if [ "$NEED_BACKPORTS" = true ]; then
         echo ""
-        echo "     On Debian ydotool lives in backports:"
-        echo "       echo 'deb http://deb.debian.org/debian trixie-backports main' \\"
-        echo "         | sudo tee /etc/apt/sources.list.d/backports.list"
+        echo "     To add it later:"
+        echo "       echo 'deb http://deb.debian.org/debian ${DEB_CODENAME}-backports main' \\"
+        echo "         | sudo tee /etc/apt/sources.list.d/${DEB_CODENAME}-backports.list"
         echo "       sudo apt update && sudo apt install ydotool"
     fi
     echo ""
