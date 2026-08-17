@@ -36,12 +36,15 @@ The install script handles all dependencies automatically.
 
 ### Debian / Ubuntu package
 
-The simplest route. Download `emoji-picker_<version>_all.deb` from the [releases page](https://github.com/jockel09/emoji-picker/releases):
+The simplest route:
 
 ```bash
-sudo apt install ./emoji-picker_1.3.0_all.deb
+curl -LO https://github.com/jockel09/emoji-picker/releases/latest/download/emoji-picker_latest_all.deb
+sudo apt install ./emoji-picker_latest_all.deb
 emoji-picker-setup
 ```
+
+That URL always points at the newest release. Versioned packages for every release are on the [releases page](https://github.com/jockel09/emoji-picker/releases).
 
 `apt` pulls in every dependency. Then run `emoji-picker-setup` **as yourself, not with `sudo`** — it adds you to the `input` group, which is what grants write access to `/dev/uinput`, and no package install can do that for you. It is safe to run again at any time and reports whatever is still missing.
 
@@ -62,14 +65,14 @@ chmod +x install.sh
 
 ### From a source archive, without git
 
-Every release ships a source archive. Pick the version you want from the [releases page](https://github.com/jockel09/emoji-picker/releases) — the tarball extracts into a directory without the leading `v`:
-
 ```bash
-curl -L https://github.com/jockel09/emoji-picker/archive/refs/tags/v1.3.0.tar.gz | tar xz
-cd emoji-picker-1.3.0
+curl -L https://github.com/jockel09/emoji-picker/archive/refs/heads/master.tar.gz | tar xz
+cd emoji-picker-master
 chmod +x install.sh
 ./install.sh
 ```
+
+That is the current code rather than a pinned release. For a specific version, take its source archive from the [releases page](https://github.com/jockel09/emoji-picker/releases) — those extract into a directory named after the tag without the leading `v`, e.g. `emoji-picker-1.3.1`.
 
 ### What install.sh does
 

@@ -47,3 +47,10 @@ jobs:
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
             || gh release create "$GITHUB_REF_NAME" --draft --title "$GITHUB_REF_NAME" --generate-notes
           gh release upload "$GITHUB_REF_NAME" dist/*.deb --clobber
+
+          # Second copy under a fixed name, so the README can link a download
+          # URL that doesn't go stale on every release. The version inside the
+          # package is unaffected — apt reads it from the control file, not the
+          # filename.
+          cp dist/emoji-picker_*_all.deb dist/emoji-picker_latest_all.deb
+          gh release upload "$GITHUB_REF_NAME" dist/emoji-picker_latest_all.deb --clobber
