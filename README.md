@@ -8,7 +8,7 @@ Built because the default KDE emoji picker can't directly insert emojis under Wa
 
 ## Features
 
-- ✅ **Direct insertion** — emojis are pasted directly into the focused window (via `ydotool`)
+- ✅ **Direct insertion** — emojis are pasted directly into the focused window (via `ydotool` or `dotool`)
 - ✅ **Auto-close** — closes after selecting an emoji
 - ✅ **Multi-insert** — hold `Shift` to collect several emojis and insert them in one go
 - ✅ **Categories** — Smileys, People, Animals, Food, Travel, Activities, Objects, Symbols, Flags
@@ -28,7 +28,9 @@ Built because the default KDE emoji picker can't directly insert emojis under Wa
 ## Requirements
 
 - **Debian 13 (Trixie)** / KDE Plasma 6 / Wayland
-- Should also work on other Debian/Ubuntu-based, Fedora-based, or Arch-based distros with Wayland + KDE
+- Should also work on other Debian/Ubuntu-based, Fedora-based, Arch-based or Void distros with Wayland + KDE
+
+For keyboard simulation either `ydotool` or `dotool` works. `dotool` needs no daemon and no systemd, which makes it the better fit on systemd-less distros or where `ydotool` isn't packaged — Void and Alpine, for instance. An installed `dotool` is picked up automatically.
 
 The install script handles all dependencies automatically.
 
@@ -79,7 +81,7 @@ That is the current code rather than a pinned release. For a specific version, t
 Unlike the package, the script runs as you, so it handles the per-user setup itself.
 
 1. Check and install missing packages (`python3-pyqt6`, `python3-cairo`, `python3-gi`, `wl-clipboard`, the Noto colour emoji font)
-2. Install `ydotool` and set it up (user service + input group)
+2. Install `ydotool` — or `dotool` on Void — and set it up (input group, plus the user service if `ydotool` is used)
 3. Install the picker to `~/.local/share/emoji-picker/`
 4. Create a launcher at `~/.local/bin/emoji-picker`
 5. Add a `.desktop` file

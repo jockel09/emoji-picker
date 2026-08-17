@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Emoji Picker — A fast, KDE-styled emoji picker for Wayland.
-Inserts emojis directly via wtype. Supports categories, search,
+Inserts emojis directly via ydotool or dotool. Supports categories, search,
 favorites, and recently used emojis.
 """
 
@@ -208,7 +208,7 @@ DEFAULT_CONFIG = {
     "columns": 9,
     "emoji_size": 28,
     "close_on_select": True,
-    "insert_method": "ydotool",  # "ydotool", "clipboard"
+    "insert_method": "auto",  # "auto", "ydotool", "dotool", "clipboard"
     "skin_tone": "",
     "gender": "",
     "language": "en",
@@ -311,24 +311,68 @@ def save_config(config):
         json.dump(config, f, ensure_ascii=False, indent=2)
 
 
-def insert_emoji(emoji, method="ydotool"):
-    """Insert emoji into the previously focused window.
-    Copies to clipboard, then simulates Ctrl+V via ydotool."""
+SUBPROCESS_ERRORS = (
+    subprocess.CalledProcessError,
+    FileNotFoundError,
+    subprocess.TimeoutExpired,
+)
 
-    # Copy emoji to clipboard
+
+def copy_to_clipboard(emoji):
+    """Copy emoji to the Wayland clipboard via wl-copy."""
     try:
         subprocess.run(["wl-copy", "--", emoji], check=True, timeout=2)
-    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+        return True
+    except SUBPROCESS_ERRORS:
         return False
 
-    # Simulate Ctrl+V via ydotool
+
+def paste_ydotool():
+    """Simulate Ctrl+V via ydotool. Needs the ydotoold daemon (systemd user service)."""
     try:
         subprocess.run(["ydotool", "key", "29:1", "47:1", "47:0", "29:0"], check=True, timeout=2)
         return True
-    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
-        pass
+    except SUBPROCESS_ERRORS:
+        return False
 
-    # Clipboard filled — user can Ctrl+V manually as last resort
+
+def paste_dotool():
+    """Simulate Ctrl+V via dotool. Daemon-less, reads commands from stdin."""
+    try:
+        subprocess.run(["dotool"], input="key ctrl+v\n", text=True, check=True, timeout=2)
+        return True
+    except SUBPROCESS_ERRORS:
+        return False
+
+
+# Tried in this order when insert_method is "auto"
+PASTE_BACKENDS = {
+    "ydotool": paste_ydotool,
+    "dotool": paste_dotool,
+}
+
+
+def insert_emoji(emoji, method="auto"):
+    """Insert emoji into the previously focused window.
+    Copies to clipboard, then simulates Ctrl+V via the configured backend.
+
+    Returns True if the paste was simulated, False if the emoji only ended up
+    on the clipboard — the user can still press Ctrl+V manually."""
+
+    if not copy_to_clipboard(emoji):
+        return False
+
+    if method == "clipboard":
+        return True
+
+    paste = PASTE_BACKENDS.get(method)
+    if paste is not None:
+        return paste()
+
+    # "auto" (and any unknown value): first backend that works wins
+    for paste in PASTE_BACKENDS.values():
+        if paste():
+            return True
     return False
 
 
@@ -1049,7 +1093,7 @@ class EmojiPicker(QWidget):
         super().closeEvent(event)
 
     def _flush_pending(self):
-        insert_emoji("".join(self._pending), self.config.get("insert_method", "wtype"))
+        insert_emoji("".join(self._pending), self.config.get("insert_method", "auto"))
         self._pending = []
         QApplication.quit()
 
