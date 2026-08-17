@@ -10,6 +10,7 @@ Built because the default KDE emoji picker can't directly insert emojis under Wa
 
 - ✅ **Direct insertion** — emojis are pasted directly into the focused window (via `ydotool`)
 - ✅ **Auto-close** — closes after selecting an emoji
+- ✅ **Multi-insert** — optionally collect several emojis and insert them in one go
 - ✅ **Categories** — Smileys, People, Animals, Food, Travel, Activities, Objects, Symbols, Flags
 - ✅ **Favorites** — right-click any emoji to add/remove as favorite
 - ✅ **Recently used** — automatically tracked
@@ -65,8 +66,8 @@ Set up a global shortcut in KDE:
 | **Click** an emoji | Insert it directly into the focused app |
 | **Right-click** an emoji | Toggle favorite ⭐ |
 | **Type** in search | Filter by name (German + English) |
-| **Escape** | Close the picker |
-| **Click outside** | Close the picker |
+| **Escape** | Close the picker (inserts collected emojis in multi-insert mode) |
+| **Click outside** | Close the picker (same) |
 
 ### Keyboard navigation
 
@@ -79,6 +80,7 @@ Set up a global shortcut in KDE:
 | `Del` | Remove focused emoji from Recents or Favorites |
 | `Ctrl+←` / `Ctrl+→` | Switch category (also works in empty search field) |
 | `Alt+←` / `Alt+→` | Move focused emoji left/right within Favorites |
+| `Backspace` | Take back the last collected emoji (multi-insert mode only) |
 
 ### Search examples
 
@@ -115,6 +117,18 @@ Settings are stored in `~/.config/emoji-picker/config.json`:
 Recently used emojis are stored separately in `~/.local/share/emoji-picker/recent.json` so dotfile managers (chezmoi, stow) can ignore it independently of the config.
 
 To use German, set `"language": "de"`. Custom languages can be added by creating a new file in the `locales/` directory.
+
+### Inserting several emojis at once
+
+Set `"close_on_select": false` to turn on multi-insert:
+
+1. Click (or `Enter`) as many emojis as you like — the picker stays open and collects them. The status line shows what you have so far.
+2. `Backspace` takes back the last one, as long as the search field is empty.
+3. `Escape`, or clicking outside, inserts everything as a single string and closes the picker.
+
+Nothing is inserted until you close it. That's deliberate: under Wayland the simulated `Ctrl+V` always lands in whichever window has focus, so the picker would have to hide and reappear for every single emoji. Collecting first means it steps aside exactly once.
+
+With the default `"close_on_select": true` the picker inserts immediately and closes, as before.
 
 ### Theme
 

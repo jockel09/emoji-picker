@@ -368,6 +368,7 @@ class EmojiButton(QToolButton):
     emoji_selected = pyqtSignal(str)
     emoji_fav_toggle = pyqtSignal(str)
     emoji_delete = pyqtSignal(str)
+    emoji_undo = pyqtSignal()
 
     def __init__(self, emoji, name="", kaomoji=False, parent=None):
         super().__init__(parent)
@@ -424,6 +425,8 @@ class EmojiButton(QToolButton):
             self.emoji_delete.emit(self.emoji)
         elif event.key() == Qt.Key.Key_F:
             self.emoji_fav_toggle.emit(self.emoji)
+        elif event.key() == Qt.Key.Key_Backspace:
+            self.emoji_undo.emit()
         else:
             super().keyPressEvent(event)
 
@@ -473,6 +476,7 @@ class EmojiGrid(QWidget):
     emoji_fav_toggle = pyqtSignal(str)
     emoji_delete = pyqtSignal(str)
     emoji_move = pyqtSignal(str, int)  # emoji, direction (-1 or +1)
+    emoji_undo = pyqtSignal()
 
     def __init__(self, columns=9, parent=None):
         super().__init__(parent)
@@ -507,6 +511,7 @@ class EmojiGrid(QWidget):
             btn.emoji_selected.connect(self.emoji_selected.emit)
             btn.emoji_fav_toggle.connect(self.emoji_fav_toggle.emit)
             btn.emoji_delete.connect(self.emoji_delete.emit)
+            btn.emoji_undo.connect(self.emoji_undo.emit)
             btn.installEventFilter(self)
             if is_kao and not kaomoji:
                 self.layout_.addWidget(btn, row, col)
@@ -576,6 +581,12 @@ class EmojiPicker(QWidget):
         self.locale = load_locale(self.config.get("language", "en"))
         self.current_category = None
         self._inserting = False
+        # Emojis picked so far when close_on_select is off — inserted as one
+        # string when the picker closes
+        self._pending = []
+        self._flushing = False
+        # Status text to restore when the collected emojis are taken back
+        self._base_status = ""
 
         # Debounce timer for search
         self._search_timer = QTimer()
@@ -754,6 +765,7 @@ class EmojiPicker(QWidget):
         self.emoji_grid.emoji_fav_toggle.connect(self.on_fav_toggle)
         self.emoji_grid.emoji_delete.connect(self.on_remove_recent)
         self.emoji_grid.emoji_move.connect(self.on_move_favorite)
+        self.emoji_grid.emoji_undo.connect(self._undo_collected)
         self.scroll.setWidget(self.emoji_grid)
         self.emoji_grid.scroll_area = self.scroll
         layout.addWidget(self.scroll)
@@ -856,6 +868,8 @@ class EmojiPicker(QWidget):
             self.emoji_grid.set_emojis(self._apply_modifiers(emojis))
             self.status.setText(t(self.locale, "status_emojis", n=len(emojis)))
 
+        self._base_status = self.status.text()
+        self._show_collect_status()
         self.scroll.verticalScrollBar().setValue(0)
 
     def on_search(self, text):
@@ -906,6 +920,8 @@ class EmojiPicker(QWidget):
         self.emoji_grid.set_emojis(self._apply_modifiers(results), kaomoji_set=self._kaomoji_set())
         key = "status_results_plural" if len(results) != 1 else "status_results"
         self.status.setText(t(self.locale, key, n=len(results)))
+        self._base_status = self.status.text()
+        self._show_collect_status()
         self.scroll.verticalScrollBar().setValue(0)
 
     def on_emoji_selected(self, emoji):
@@ -916,22 +932,67 @@ class EmojiPicker(QWidget):
         recent.insert(0, emoji)
         save_recent(recent[:self.config.get("max_recent", 36)])
 
+        # Collect mode: keep the picker open and insert everything at the end.
+        # Inserting per click would mean hiding and reshowing the window every
+        # time, because the simulated Ctrl+V always goes to the focused window.
+        if not self.config.get("close_on_select", True):
+            self._pending.append(emoji)
+            self._show_collect_status()
+            return
+
         # Flag to prevent focus-loss handler from killing the app
         self._inserting = True
 
         # Close first, then insert (so the target window gets focus back)
-        if self.config.get("close_on_select", True):
-            self.hide()
-            # 300ms delay for Wayland compositor to refocus previous window
-            QTimer.singleShot(300, lambda: self._do_insert(emoji))
-        else:
-            self._do_insert(emoji)
+        self.hide()
+        # 300ms delay for Wayland compositor to refocus previous window
+        QTimer.singleShot(300, lambda: self._do_insert(emoji))
 
     def _do_insert(self, emoji):
         method = self.config.get("insert_method", "wtype")
         insert_emoji(emoji, method)
-        if self.config.get("close_on_select", True):
-            QApplication.quit()
+        QApplication.quit()
+
+    def _show_collect_status(self):
+        """Replace the status line with the emojis collected so far, if any."""
+        if not self._pending:
+            return
+        shown = self._pending[-12:]
+        text = ("…" if len(self._pending) > 12 else "") + "".join(shown)
+        self.status.setText(t(self.locale, "status_collected",
+                              n=len(self._pending), emojis=text))
+
+    def _undo_collected(self):
+        """Drop the last collected emoji. Returns False if there was none."""
+        if not self._pending:
+            return False
+        self._pending.pop()
+        if self._pending:
+            self._show_collect_status()
+        else:
+            # Restore the plain status instead of rebuilding the grid — a rebuild
+            # would delete the button whose key event we're handling, and would
+            # clear an active search
+            self.status.setText(self._base_status)
+        return True
+
+    def closeEvent(self, event):
+        """Insert everything collected before the window goes away."""
+        if self._pending and not self._flushing:
+            self._flushing = True
+            # Suppress the focus-loss close while we step aside to insert
+            self._inserting = True
+            event.ignore()
+            self.hide()
+            # 300ms delay for Wayland compositor to refocus previous window
+            QTimer.singleShot(300, self._flush_pending)
+            return
+        super().closeEvent(event)
+
+    def _flush_pending(self):
+        insert_emoji("".join(self._pending), self.config.get("insert_method", "wtype"))
+        self._pending = []
+        QApplication.quit()
 
     def on_fav_toggle(self, emoji):
         favs = self.config.get("favorites", [])
@@ -979,6 +1040,10 @@ class EmojiPicker(QWidget):
                     return True
                 elif event.key() == Qt.Key.Key_Right:
                     self._switch_category(1)
+                    return True
+            # Backspace in an empty search field takes back the last pick
+            if event.key() == Qt.Key.Key_Backspace and not self.search.text():
+                if self._undo_collected():
                     return True
         return super().eventFilter(obj, event)
 

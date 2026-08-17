@@ -26,6 +26,7 @@
   "status_emojis": "{n} Emojis  •  Rechtsklick/F = Favorit",
   "status_results": "{n} Ergebnis",
   "status_results_plural": "{n} Ergebnisse",
+  "status_collected": "{emojis}  •  {n} gesammelt  •  Backspace = zurück, Esc = einfügen",
   "fav_added": "Favorit hinzugefügt ⭐",
   "fav_removed": "Favorit entfernt"
 }
