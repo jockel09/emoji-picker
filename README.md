@@ -20,7 +20,7 @@ Built because the default KDE emoji picker can't directly insert emojis under Wa
 - ✅ **Kaomoji support** — optional tab with text-based emoticons, fully customizable via `kaomoji.json`
 - ✅ **Keyboard navigation** — fully operable without a mouse
 - ✅ **Color emojis** — rendered via Cairo/Pango (not Qt's broken text rendering)
-- ✅ **Dark theme** — matches KDE Breeze Dark
+- ✅ **Dark theme** — with the accent color picked up from your KDE settings
 - ✅ **Focus-loss close** — click outside to dismiss
 - ✅ **Lightweight** — no daemon, no background process, starts on demand
 
@@ -107,13 +107,25 @@ Settings are stored in `~/.config/emoji-picker/config.json`:
   "skin_tone": "",
   "gender": "",
   "language": "en",
-  "kaomoji": false
+  "kaomoji": false,
+  "theme": "auto"
 }
 ```
 
 Recently used emojis are stored separately in `~/.local/share/emoji-picker/recent.json` so dotfile managers (chezmoi, stow) can ignore it independently of the config.
 
 To use German, set `"language": "de"`. Custom languages can be added by creating a new file in the `locales/` directory.
+
+### Theme
+
+| Value | Behaviour |
+|---|---|
+| `auto` (default) | Read the accent color from `~/.config/kdeglobals` |
+| `dark` | Always use the built-in accent (`#5294e2`) |
+
+The accent is used for the search field focus border, the active category underline and selection highlights. The rest of the palette is the built-in dark theme in both cases.
+
+The color is read once per launch, so a change in **System Settings → Colors** shows up the next time you open the picker. If `kdeglobals` is missing or unreadable — on non-KDE desktops, for instance — the built-in accent is used.
 
 ### Kaomoji
 

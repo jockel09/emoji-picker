@@ -8,6 +8,7 @@ favorites, and recently used emojis.
 import sys
 import os
 import json
+import configparser
 import subprocess
 from pathlib import Path
 from PyQt6.QtWidgets import (
@@ -175,7 +176,74 @@ DEFAULT_CONFIG = {
     "gender": "",
     "language": "en",
     "kaomoji": False,
+    "theme": "auto",  # "auto" (follow KDE accent color), "dark" (built-in)
 }
+
+
+KDE_GLOBALS = Path.home() / ".config" / "kdeglobals"
+
+# Built-in accent, used when the KDE color can't be read or theme is "dark"
+ACCENT_FALLBACK = (82, 148, 226)  # #5294e2
+
+# Current accent as an (r, g, b) tuple — set by init_accent() at startup
+ACCENT = ACCENT_FALLBACK
+
+
+def parse_kde_color(value):
+    """Parse a kdeglobals color value ("r,g,b" or "r,g,b,a") into an (r, g, b) tuple."""
+    parts = value.split(",")
+    if len(parts) < 3:
+        return None
+    try:
+        rgb = tuple(int(p) for p in parts[:3])
+    except ValueError:
+        return None
+    if any(c < 0 or c > 255 for c in rgb):
+        return None
+    return rgb
+
+
+def read_kde_accent():
+    """Read the accent color from ~/.config/kdeglobals, or None if unavailable.
+
+    [General] AccentColor only exists when the user picked a custom accent (or
+    accent-from-wallpaper). With a plain color scheme applied the key is absent,
+    and the scheme's selection background is what acts as the accent."""
+    parser = configparser.RawConfigParser(strict=False)
+    parser.optionxform = str  # kdeglobals keys are case-sensitive
+    try:
+        parser.read(KDE_GLOBALS, encoding="utf-8")
+    except (configparser.Error, OSError, UnicodeDecodeError):
+        return None
+
+    for section, key in (("General", "AccentColor"),
+                         ("Colors:Selection", "BackgroundNormal")):
+        try:
+            value = parser.get(section, key)
+        except (configparser.NoSectionError, configparser.NoOptionError):
+            continue
+        rgb = parse_kde_color(value)
+        if rgb:
+            return rgb
+    return None
+
+
+def init_accent(config):
+    """Pick the accent color for this run. Called once before any widget is built."""
+    global ACCENT
+    if config.get("theme", "auto") == "auto":
+        ACCENT = read_kde_accent() or ACCENT_FALLBACK
+    else:
+        ACCENT = ACCENT_FALLBACK
+
+
+def accent_hex():
+    return "#%02x%02x%02x" % ACCENT
+
+
+def accent_rgba(alpha):
+    r, g, b = ACCENT
+    return f"rgba({r}, {g}, {b}, {alpha})"
 
 
 def load_config():
@@ -276,7 +344,7 @@ class GenderButton(QPushButton):
 
     def _refresh_style(self):
         if self.isChecked():
-            bg, border = "rgba(82, 148, 226, 0.3)", "2px solid #5294e2"
+            bg, border = accent_rgba(0.3), f"2px solid {accent_hex()}"
         else:
             bg, border = "rgba(255,255,255,0.06)", "2px solid transparent"
         self.setStyleSheet(f"""
@@ -382,20 +450,20 @@ class CategoryButton(QPushButton):
         self._update_style()
 
     def _update_style(self):
-        self.setStyleSheet("""
-            QPushButton {
+        self.setStyleSheet(f"""
+            QPushButton {{
                 border: none;
                 border-radius: 6px;
                 background: transparent;
                 padding: 2px;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background: rgba(255, 255, 255, 0.08);
-            }
-            QPushButton:checked {
+            }}
+            QPushButton:checked {{
                 background: rgba(255, 255, 255, 0.12);
-                border-bottom: 2px solid #5294e2;
-            }
+                border-bottom: 2px solid {accent_hex()};
+            }}
         """)
 
 
@@ -504,6 +572,7 @@ class EmojiPicker(QWidget):
     def __init__(self):
         super().__init__()
         self.config = load_config()
+        init_accent(self.config)
         self.locale = load_locale(self.config.get("language", "en"))
         self.current_category = None
         self._inserting = False
@@ -561,19 +630,19 @@ class EmojiPicker(QWidget):
         self.search.setPlaceholderText(t(self.locale, "search_placeholder"))
         self.search.setClearButtonEnabled(True)
         self.search.installEventFilter(self)
-        self.search.setStyleSheet("""
-            QLineEdit {
+        self.search.setStyleSheet(f"""
+            QLineEdit {{
                 background: #1e1f22;
                 border: 1px solid #3f4147;
                 border-radius: 8px;
                 padding: 8px 12px;
                 color: #dbdee1;
                 font-size: 14px;
-                selection-background-color: #5294e2;
-            }
-            QLineEdit:focus {
-                border: 1px solid #5294e2;
-            }
+                selection-background-color: {accent_hex()};
+            }}
+            QLineEdit:focus {{
+                border: 1px solid {accent_hex()};
+            }}
         """)
         self.search.textChanged.connect(self.on_search)
 
