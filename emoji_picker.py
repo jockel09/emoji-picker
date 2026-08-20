@@ -9,6 +9,7 @@ import sys
 import os
 import json
 import configparser
+import shutil
 import subprocess
 from pathlib import Path
 from PyQt6.QtWidgets import (
@@ -350,6 +351,21 @@ PASTE_BACKENDS = {
     "ydotool": paste_ydotool,
     "dotool": paste_dotool,
 }
+
+
+def refocus_delay_ms(method):
+    """How long to wait after hiding the picker before injecting Ctrl+V.
+
+    The compositor needs a moment to hand focus back to the window the user
+    came from. dotool creates a fresh uinput device on every call and waits
+    for the compositor to notice it, so that wait happens anyway inside dotool
+    and we only need enough to get our own window off screen first."""
+    if method == "clipboard":
+        return 0
+    # In "auto" mode ydotool is tried first, so it only really runs if it exists
+    if method == "dotool" or (method != "ydotool" and not shutil.which("ydotool")):
+        return 50
+    return 300
 
 
 def insert_emoji(emoji, method="auto"):
@@ -1050,8 +1066,10 @@ class EmojiPicker(QWidget):
         # Flag to prevent focus-loss handler from killing the app
         self._inserting = True
         self.hide()
-        # 300ms delay for Wayland compositor to refocus previous window
-        QTimer.singleShot(300, self._flush_pending)
+        QTimer.singleShot(self._refocus_delay(), self._flush_pending)
+
+    def _refocus_delay(self):
+        return refocus_delay_ms(self.config.get("insert_method", "auto"))
 
     def _show_collect_status(self):
         """Show the collected emojis next to a short hint."""
@@ -1087,8 +1105,7 @@ class EmojiPicker(QWidget):
             self._inserting = True
             event.ignore()
             self.hide()
-            # 300ms delay for Wayland compositor to refocus previous window
-            QTimer.singleShot(300, self._flush_pending)
+            QTimer.singleShot(self._refocus_delay(), self._flush_pending)
             return
         super().closeEvent(event)
 

@@ -147,7 +147,7 @@ Settings are stored in `~/.config/emoji-picker/config.json`:
   "max_recent": 36,
   "columns": 9,
   "close_on_select": true,
-  "insert_method": "ydotool",
+  "insert_method": "auto",
   "skin_tone": "",
   "gender": "",
   "language": "en",
@@ -159,6 +159,21 @@ Settings are stored in `~/.config/emoji-picker/config.json`:
 Recently used emojis are stored separately in `~/.local/share/emoji-picker/recent.json` so dotfile managers (chezmoi, stow) can ignore it independently of the config.
 
 To use German, set `"language": "de"`. Custom languages can be added by creating a new file in the `locales/` directory.
+
+### Insert method
+
+`insert_method` controls how the emoji reaches the focused window:
+
+| Value | Behaviour |
+|---|---|
+| `auto` (default) | Try `ydotool`, then `dotool` — the first one that works wins |
+| `ydotool` | Force `ydotool`. Needs the `ydotoold` daemon (systemd user service) |
+| `dotool` | Force `dotool`. Daemon-less, works without systemd |
+| `clipboard` | Copy only, no paste — press `Ctrl+V` yourself |
+
+The emoji is copied to the clipboard in every case, so even when the paste fails you can still paste it by hand.
+
+`dotool` creates a fresh virtual input device on every keystroke and waits for the compositor to notice it, which makes each insertion take roughly half a second longer than `ydotool`, whose daemon is already running. In exchange it needs no daemon and no systemd. Setting `"insert_method": "dotool"` explicitly is worth it on machines that have `ydotool` installed but unused — `auto` would otherwise attempt it first and wait for that to fail.
 
 ### Inserting several emojis at once
 
