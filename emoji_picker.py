@@ -323,7 +323,7 @@ def insert_emoji(emoji, method="ydotool"):
 
     # Simulate Ctrl+V via ydotool
     try:
-        subprocess.run(["ydotool", "key", "29:1", "47:1", "47:0", "29:0"], check=True, timeout=2)
+        subprocess.run(["ydotool", "key", "42:1", "29:1", "47:1", "47:0", "29:0", "42:0"], check=True, timeout=2)
         return True
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         pass
