@@ -584,6 +584,7 @@ class EmojiGrid(QWidget):
         self.buttons = []
         self._cols = columns
         self._last_row_stretch = 0
+        self._last_col_stretch = 0
         self.scroll_area = None
 
     def set_emojis(self, emojis, kaomoji=False, kaomoji_set=None):
@@ -593,9 +594,11 @@ class EmojiGrid(QWidget):
             item = self.layout_.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
-        # Reset row stretches from previous call
+        # Reset row and column stretches from previous call
         for r in range(self._last_row_stretch + 1):
             self.layout_.setRowStretch(r, 0)
+        for c in range(self._last_col_stretch):
+            self.layout_.setColumnStretch(c, 0)
         self.buttons.clear()
 
         cols = 1 if kaomoji else self.columns
@@ -623,6 +626,14 @@ class EmojiGrid(QWidget):
                     col = 0
                     row += 1
             self.buttons.append(btn)
+
+        # Give every column a share, including the ones left empty by a short
+        # result set. QGridLayout only sizes columns that hold a widget, so three
+        # results would otherwise split the width three ways and sit far apart,
+        # while ten results split it nine ways. Same emoji, different position.
+        for c in range(cols):
+            self.layout_.setColumnStretch(c, 1)
+        self._last_col_stretch = cols
 
         # Add stretch at the bottom so rows don't spread across the scroll area
         self.layout_.setRowStretch(row + 1, 1)
