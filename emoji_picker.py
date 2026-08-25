@@ -54,6 +54,13 @@ def t(locale, key, **kwargs):
 _emoji_pixmap_cache = {}
 
 
+# Width of the vertical scrollbar, and it has to match the "width: 6px" in the
+# scroll area's stylesheet below. Its space is reserved even while the bar is
+# hidden, so column widths stay the same in views that scroll and views that
+# don't, and the emojis don't shift sideways when switching between them.
+SCROLLBAR_WIDTH = 6
+
+
 def render_emoji_pixmap(emoji, size=32):
     """Render an emoji character to a QPixmap using Cairo/Pango for full color support."""
     if (emoji, size) in _emoji_pixmap_cache:
@@ -1157,6 +1164,11 @@ class EmojiPicker(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
+        # Cap the grid at the width it has while a scrollbar is showing, so the
+        # columns keep that width in the views that don't need one. Taken from
+        # the scroll area rather than its viewport, because the viewport is
+        # already the narrower one whenever a bar happens to be visible.
+        self.emoji_grid.setMaximumWidth(self.scroll.width() - SCROLLBAR_WIDTH)
         self.search.setFocus()
         self.center_on_screen()
 
