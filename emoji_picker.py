@@ -217,6 +217,7 @@ DEFAULT_CONFIG = {
     "emoji_size": 28,
     "close_on_select": True,
     "insert_method": "auto",  # "auto", "ydotool", "dotool", "clipboard"
+    "paste_shortcut": "ctrl+v",  # "ctrl+v", "ctrl+shift+v" (terminals)
     "skin_tone": "",
     "gender": "",
     "language": "en",
@@ -335,19 +336,42 @@ def copy_to_clipboard(emoji):
         return False
 
 
-def paste_ydotool():
-    """Simulate Ctrl+V via ydotool. Needs the ydotoold daemon (systemd user service)."""
+# The keystroke that pastes, per backend. ydotool speaks Linux keycodes, where
+# 29 is left ctrl, 42 left shift and 47 the V key, with :1 pressing and :0
+# releasing. dotool takes names.
+#
+# Ctrl+Shift+V is not "Ctrl+V with shift held", it is a separate shortcut:
+# terminals paste with it, browsers and most editors paste without formatting,
+# LibreOffice opens its Paste Special dialog, and plenty of Qt and GTK apps
+# don't bind it at all. So it can't be the default, only a choice.
+PASTE_SHORTCUTS = {
+    "ctrl+v": {
+        "ydotool": ["29:1", "47:1", "47:0", "29:0"],
+        "dotool": "key ctrl+v\n",
+    },
+    "ctrl+shift+v": {
+        "ydotool": ["42:1", "29:1", "47:1", "47:0", "29:0", "42:0"],
+        "dotool": "key ctrl+shift+v\n",
+    },
+}
+DEFAULT_PASTE_SHORTCUT = "ctrl+v"
+
+
+def paste_ydotool(shortcut=DEFAULT_PASTE_SHORTCUT):
+    """Paste via ydotool. Needs the ydotoold daemon (systemd user service)."""
     try:
-        subprocess.run(["ydotool", "key", "29:1", "47:1", "47:0", "29:0"], check=True, timeout=2)
+        keys = PASTE_SHORTCUTS[shortcut]["ydotool"]
+        subprocess.run(["ydotool", "key", *keys], check=True, timeout=2)
         return True
     except SUBPROCESS_ERRORS:
         return False
 
 
-def paste_dotool():
-    """Simulate Ctrl+V via dotool. Daemon-less, reads commands from stdin."""
+def paste_dotool(shortcut=DEFAULT_PASTE_SHORTCUT):
+    """Paste via dotool. Daemon-less, reads commands from stdin."""
     try:
-        subprocess.run(["dotool"], input="key ctrl+v\n", text=True, check=True, timeout=2)
+        keys = PASTE_SHORTCUTS[shortcut]["dotool"]
+        subprocess.run(["dotool"], input=keys, text=True, check=True, timeout=2)
         return True
     except SUBPROCESS_ERRORS:
         return False
@@ -375,12 +399,12 @@ def refocus_delay_ms(method):
     return 300
 
 
-def insert_emoji(emoji, method="auto"):
+def insert_emoji(emoji, method="auto", shortcut=DEFAULT_PASTE_SHORTCUT):
     """Insert emoji into the previously focused window.
-    Copies to clipboard, then simulates Ctrl+V via the configured backend.
+    Copies to clipboard, then sends the paste shortcut via the chosen backend.
 
     Returns True if the paste was simulated, False if the emoji only ended up
-    on the clipboard — the user can still press Ctrl+V manually."""
+    on the clipboard, which the user can still paste by hand."""
 
     if not copy_to_clipboard(emoji):
         return False
@@ -388,13 +412,17 @@ def insert_emoji(emoji, method="auto"):
     if method == "clipboard":
         return True
 
+    # A typo in config.json shouldn't stop insertion from working
+    if shortcut not in PASTE_SHORTCUTS:
+        shortcut = DEFAULT_PASTE_SHORTCUT
+
     paste = PASTE_BACKENDS.get(method)
     if paste is not None:
-        return paste()
+        return paste(shortcut)
 
     # "auto" (and any unknown value): first backend that works wins
     for paste in PASTE_BACKENDS.values():
-        if paste():
+        if paste(shortcut):
             return True
     return False
 
@@ -1128,7 +1156,9 @@ class EmojiPicker(QWidget):
         super().closeEvent(event)
 
     def _flush_pending(self):
-        insert_emoji("".join(self._pending), self.config.get("insert_method", "auto"))
+        insert_emoji("".join(self._pending),
+                     self.config.get("insert_method", "auto"),
+                     self.config.get("paste_shortcut", DEFAULT_PASTE_SHORTCUT))
         self._pending = []
         QApplication.quit()
 

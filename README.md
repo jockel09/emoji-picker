@@ -148,6 +148,7 @@ Settings are stored in `~/.config/emoji-picker/config.json`:
   "columns": 9,
   "close_on_select": true,
   "insert_method": "auto",
+  "paste_shortcut": "ctrl+v",
   "skin_tone": "",
   "gender": "",
   "language": "en",
@@ -172,6 +173,17 @@ To use German, set `"language": "de"`. Custom languages can be added by creating
 | `clipboard` | Copy only, no paste — press `Ctrl+V` yourself |
 
 The emoji is copied to the clipboard in every case, so even when the paste fails you can still paste it by hand.
+
+### Paste shortcut
+
+`paste_shortcut` is the keystroke the picker sends once the emoji is on the clipboard:
+
+| Value | Use it when |
+|---|---|
+| `ctrl+v` (default) | Normal applications |
+| `ctrl+shift+v` | You mostly paste into terminals |
+
+Terminals don't paste on `Ctrl+V`, they use `Ctrl+Shift+V`, so emojis appear to vanish there. Switching this setting fixes that, but it isn't a free win the other way round: `Ctrl+Shift+V` is a separate shortcut, not `Ctrl+V` with Shift held. Browsers and most editors treat it as paste-without-formatting, which is fine for an emoji, but LibreOffice opens its Paste Special dialog and plenty of Qt and GTK applications don't bind it at all. Pick whichever matches where you paste most.
 
 `dotool` creates a fresh virtual input device on every keystroke and waits for the compositor to notice it, which makes each insertion take roughly half a second longer than `ydotool`, whose daemon is already running. In exchange it needs no daemon and no systemd. Setting `"insert_method": "dotool"` explicitly is worth it on machines that have `ydotool` installed but unused — `auto` would otherwise attempt it first and wait for that to fail.
 
