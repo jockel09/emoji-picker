@@ -52,7 +52,11 @@ elif command -v dnf &>/dev/null; then
     PKG_MANAGER="dnf"
     PKG_PYQT6="python3-pyqt6"
     PKG_CAIRO="python3-cairo"
-    PKG_GI="python3-gobject3"
+    # python3-gobject3 does not exist on Fedora, the package is python3-gobject.
+    # pango carries the Pango/PangoCairo typelibs, and gobject-introspection the
+    # cairo one that PangoCairo pulls in. All three verified against the repos.
+    PKG_GI="python3-gobject pango gobject-introspection"
+    PKG_EMOJIFONT="google-noto-color-emoji-fonts"
 elif command -v pacman &>/dev/null; then
     PKG_MANAGER="pacman"
     PKG_PYQT6="python-pyqt6"
@@ -238,29 +242,117 @@ fi
 echo ""
 echo "  🔧 Configuring input access..."
 
+# Both backends write to /dev/uinput. Debian's ydotool package ships a udev rule
+# that hands it to group 'input'; Fedora's does not, so there it stays root-only
+# and group membership buys nothing. Returns 0 when the device is out of reach.
+uinput_locked() {
+    local grp mode
+    [ -e /dev/uinput ] || return 0
+    grp=$(stat -c '%G' /dev/uinput 2>/dev/null) || return 0
+    mode=$(stat -c '%a' /dev/uinput 2>/dev/null) || return 0
+    # Second digit from the right is the group's permission
+    case "${mode: -2:1}" in
+        6|7) [ "$grp" = "input" ] && return 1 ;;
+    esac
+    return 0
+}
+
+install_uinput_rule() {
+    local rule="/etc/udev/rules.d/99-uinput-emoji-picker.rules"
+    echo ""
+    echo "  📦 /dev/uinput is not reachable for group 'input', so keyboard"
+    echo "     simulation can't open it. Your distribution ships no udev rule"
+    echo "     for it; Debian's ydotool package does, which is why this only"
+    echo "     comes up on some systems."
+    echo "     The fix is a rule in /etc/udev/rules.d, so it changes device"
+    echo "     permissions system wide, not just for this program."
+    read -p "  Add that rule? [Y/n] " answer
+    [[ "$answer" != "n" && "$answer" != "N" ]] || return 1
+
+    echo "  🔧 Writing $rule"
+    sudo mkdir -p /etc/udev/rules.d
+    if ! echo 'KERNEL=="uinput", GROUP="input", MODE="0660", OPTIONS+="static_node=uinput"' \
+        | sudo tee "$rule" >/dev/null; then
+        echo "  ⚠️  Could not write the rule, continuing without it."
+        return 1
+    fi
+    sudo udevadm control --reload 2>/dev/null || true
+    sudo udevadm trigger --name-match=uinput 2>/dev/null || true
+    echo "  ✅ Rule added. It takes effect after a reboot at the latest."
+}
+
+# The three places a ydotool user unit can legitimately live. Debian's package
+# installs one under /usr/lib; Fedora's ships only a system unit, which runs as
+# root and puts its socket out of the user's reach.
+ydotool_user_unit_exists() {
+    [ -f "$HOME/.config/systemd/user/ydotool.service" ] \
+        || [ -f /etc/systemd/user/ydotool.service ] \
+        || [ -f /usr/lib/systemd/user/ydotool.service ] \
+        || [ -f /lib/systemd/user/ydotool.service ]
+}
+
+# Where there is none, write one, so the daemon comes up at login instead of
+# dying with whatever terminal happened to start it.
+create_ydotool_user_unit() {
+    local unit="$HOME/.config/systemd/user/ydotool.service"
+    echo "  🔧 No ydotool user service found, writing $unit"
+    mkdir -p "$(dirname "$unit")"
+    cat > "$unit" <<UNIT
+[Unit]
+Description=ydotoold user daemon
+
+[Service]
+Type=simple
+Restart=always
+ExecStart=$(command -v ydotoold || echo /usr/bin/ydotoold)
+
+[Install]
+WantedBy=default.target
+UNIT
+    systemctl --user daemon-reload 2>/dev/null || true
+}
+
 NEED_RELOGIN=false
 
-# Both backends write to /dev/uinput, which udev grants to group 'input' — so do
-# this even when no backend is installed yet, and a later one needs no second visit
+# Do this even when no backend is installed yet, so adding one later needs no
+# second visit to usermod
 if ! groups "$USER" | grep -qw input; then
     echo "  Adding $USER to group 'input'..."
     sudo usermod -aG input "$USER"
     NEED_RELOGIN=true
 fi
 
+if uinput_locked; then
+    install_uinput_rule || true
+fi
+
 if [ "$INPUT_BACKEND" = "ydotool" ]; then
     # Only ydotool has a daemon; dotool is invoked per keystroke
-    if command -v systemctl &>/dev/null; then
-        if ! systemctl --user is-enabled ydotool &>/dev/null; then
-            systemctl --user enable ydotool 2>/dev/null || true
-        fi
-        if ! systemctl --user is-active ydotool &>/dev/null; then
-            systemctl --user start ydotool 2>/dev/null || true
-        fi
-        echo "  ✅ ydotool configured"
-    else
-        echo "  ⚠️  No systemd found — start 'ydotoold' yourself, or install dotool,"
+    if ! command -v systemctl &>/dev/null; then
+        echo "  ⚠️  No systemd found. Start 'ydotoold' yourself, or install dotool,"
         echo "     which needs no daemon and is picked up automatically."
+    else
+        # Ask the filesystem, not systemctl: "systemctl --user cat" returns 0 on
+        # Fedora even with no user unit present, because it finds a global
+        # drop-in instead, while "status" on the same box says it doesn't exist.
+        if ! ydotool_user_unit_exists; then
+            create_ydotool_user_unit
+        fi
+        systemctl --user enable --now ydotool 2>/dev/null || true
+
+        # Report what actually happened rather than assuming it worked. The old
+        # version enabled, swallowed the error and printed a checkmark, which on
+        # Fedora meant claiming success for a service that was never there.
+        if systemctl --user is-active ydotool &>/dev/null; then
+            echo "  ✅ ydotool service running"
+        elif [ "$NEED_RELOGIN" = true ]; then
+            echo "  ⚠️  ydotool service not up yet, which is expected: the group"
+            echo "     change isn't active in this session. It should start after"
+            echo "     you log back in."
+        else
+            echo "  ⚠️  ydotool service did not start. Check:"
+            echo "       systemctl --user status ydotool"
+        fi
     fi
 elif [ -n "$INPUT_BACKEND" ]; then
     echo "  ✅ $INPUT_BACKEND needs no service"

@@ -88,6 +88,8 @@ Unlike the package, the script runs as you, so it handles the per-user setup its
 
 > **Note:** If you were added to the `input` group during installation, you need to **log out and back in** for direct insertion to work.
 
+> **Fedora users:** two things are missing there that Debian's `ydotool` package brings along, and the installer offers both. `/dev/uinput` stays root-only because no udev rule hands it to group `input`, so the installer offers to add one, which changes device permissions system wide. And Fedora ships only a system service, which runs the daemon as root with its socket out of your reach, so the installer writes a user service instead. That one starts at login, rather than dying with whatever terminal you launched it from.
+
 > **Debian users:** `ydotool` is only in **backports**, so a stock Debian 13 doesn't have it. The installer notices, tells you that enabling backports changes your package sources, and offers to do it. Decline and it finishes anyway — the picker then copies to the clipboard instead of inserting, and prints the commands to add `ydotool` later.
 
 ## Keyboard Shortcut
