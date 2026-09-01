@@ -42,7 +42,10 @@ gi.require_version('Pango', '1.0')
 gi.require_version('PangoCairo', '1.0')
 from gi.repository import Pango, PangoCairo
 
-from emoji_data import EMOJI_CATEGORIES, ALL_EMOJIS, SKIN_TONE_EMOJIS, GENDER_EMOJIS
+from emoji_data import (
+    EMOJI_CATEGORIES, ALL_EMOJIS, SKIN_TONE_EMOJIS, GENDER_EMOJIS,
+    GENDER_SWAP_EMOJIS,
+)
 from search_tags import SEARCH_TAGS
 
 LOCALE_DIR = Path(__file__).resolve().parent / "locales"
@@ -319,6 +322,41 @@ GENDER_MODIFIERS = [
     ("\u200D\u2642\uFE0F", "♂"),    # male:   ZWJ + ♂ + FE0F
     ("\u200D\u2640\uFE0F", "♀"),    # female: ZWJ + ♀ + FE0F
 ]
+
+# The person that replaces 🧑 in the sequences of GENDER_SWAP_EMOJIS
+GENDER_SWAP_PEOPLE = {
+    "\u200D\u2642\uFE0F": "👨",
+    "\u200D\u2640\uFE0F": "👩",
+}
+
+ZWJ = "\u200D"
+
+
+def apply_modifiers(emoji, tone, gender):
+    """Put a skin tone and a gender into one emoji, as far as it takes them.
+
+    Both belong inside the sequence rather than after it. The tone goes on the
+    person at the front, and a gender either follows that person as its own
+    part or replaces them outright, depending on how the sequence spells it —
+    🚶 turns into 🚶‍♀️, while 🧑‍🦯‍➡️ turns into 👩‍🦯‍➡️. Sticking either on the end
+    would ruin anything that carries a part behind the person, which is what
+    the facing-right people of Emoji 15.1 do."""
+    swap = GENDER_SWAP_PEOPLE.get(gender) if emoji in GENDER_SWAP_EMOJIS else None
+    takes_tone = bool(tone) and emoji in SKIN_TONE_EMOJIS
+    takes_gender = bool(gender) and emoji in GENDER_EMOJIS
+    if not takes_tone and not takes_gender and swap is None:
+        return emoji
+
+    parts = emoji.split(ZWJ)
+    person = swap or parts[0]
+    if takes_tone:
+        # A tone can't follow the variation selector, it replaces it
+        person = person.replace("\uFE0F", "") + tone
+    pieces = [person]
+    if takes_gender:
+        pieces.append(gender.lstrip(ZWJ))
+    pieces.extend(parts[1:])
+    return ZWJ.join(pieces)
 
 DEFAULT_CONFIG = {
     "favorites": [],
@@ -1519,21 +1557,7 @@ class EmojiPicker(QWidget):
         gender = self.config.get("gender", "")
         if not tone and not gender:
             return emojis
-        result = []
-        for emoji, name in emojis:
-            in_skin = emoji in SKIN_TONE_EMOJIS
-            in_gender = emoji in GENDER_EMOJIS
-            if not (tone and in_skin) and not (gender and in_gender):
-                result.append((emoji, name))
-                continue
-            base = emoji.replace('\uFE0F', '')
-            modified = base
-            if tone and in_skin:
-                modified += tone
-            if gender and in_gender:
-                modified += gender
-            result.append((modified, name))
-        return result
+        return [(apply_modifiers(emoji, tone, gender), name) for emoji, name in emojis]
 
     def _refresh_view(self):
         if self._search_text:

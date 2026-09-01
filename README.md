@@ -6,12 +6,20 @@ Built because the default KDE emoji picker can't directly insert emojis under Wa
 
 ![Emoji Picker Screenshot](screenshot.png)
 
+## Whats new
+
+- 🖐🏻 draggable window to use the picker where you want
+- 📌 pin the position for the next time you open the picker
+- 🫪🍋‍🟩🙂‍↕️🫆🛘🫈 46 new Emojis
+
+
 ## Features
 
 - ✅ **Direct insertion** — emojis are pasted directly into the focused window (via `ydotool` or `dotool`)
 - ✅ **Auto-close** — closes after selecting an emoji
 - ✅ **Multi-insert** — hold `Shift` to collect several emojis and insert them in one go
 - ✅ **Categories** — Smileys, People, Animals, Food, Travel, Activities, Objects, Symbols, Flags
+- ✅ **Up to date** — 1440 emojis, current as of Emoji 17.0 (August 2025)
 - ✅ **Favorites** — right-click any emoji to add/remove as favorite
 - ✅ **Recently used** — automatically tracked
 - ✅ **Search** — with German and English terms (e.g. "auto", "car", "lachen", "laugh")
