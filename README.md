@@ -22,6 +22,7 @@ Built because the default KDE emoji picker can't directly insert emojis under Wa
 - ✅ **Keyboard navigation** — fully operable without a mouse
 - ✅ **Color emojis** — rendered via Cairo/Pango (not Qt's broken text rendering)
 - ✅ **Dark theme** — with the accent color picked up from your KDE settings
+- ✅ **Movable window** — drag it anywhere, and pin 📌 the spot so it opens there next time
 - ✅ **Focus-loss close** — click outside to dismiss
 - ✅ **Lightweight** — no daemon, no background process, starts on demand
 
@@ -111,6 +112,8 @@ Set up a global shortcut in KDE:
 | **Type** in search | Filter by name (German + English) |
 | **Escape** | Close the picker (inserts collected emojis in multi-insert mode) |
 | **Click outside** | Close the picker (same) |
+| **Drag** the background | Move the window — see [window position](#window-position) |
+| **Click** the pin 📌 | Open at this spot from now on |
 
 ### Keyboard navigation
 
@@ -155,13 +158,37 @@ Settings are stored in `~/.config/emoji-picker/config.json`:
   "gender": "",
   "language": "en",
   "kaomoji": false,
-  "theme": "auto"
+  "theme": "auto",
+  "remember_position": false,
+  "window_position": null
 }
 ```
 
 Recently used emojis are stored separately in `~/.local/share/emoji-picker/recent.json` so dotfile managers (chezmoi, stow) can ignore it independently of the config.
 
 To use German, set `"language": "de"`. Custom languages can be added by creating a new file in the `locales/` directory.
+
+### Window position
+
+The picker opens centered. Drag it by any empty spot of its background — next to
+the category buttons, or the strip along the bottom — and it goes where you put
+it. That much is one-off; the pin 📌 next to the skin tone and gender buttons is
+what makes it stick. Pin it once and every later launch opens at that spot, drag
+it again while pinned and the new spot is the one that's kept. Clicking the pin
+again forgets the position and the picker goes back to opening centered.
+
+`remember_position` and `window_position` in the config are that pin: the first
+is what the button toggles, the second is the remembered spot as `[x, y]`. A
+remembered position that ends up off-screen — after unplugging a monitor, say —
+is ignored and the picker opens centered instead.
+
+A Wayland window can't place itself: the protocol has no way for an application
+to say where it wants to be, and Qt's `move()` is silently dropped. So the
+position is read and set through KWin, by way of a short-lived script handed to
+its scripting service. That makes the pin a Plasma feature — on a Wayland
+session with a different compositor the button isn't shown at all, because there
+would be nothing behind it. On X11 the window places itself and the pin works
+without KWin. Dragging works everywhere, since the compositor runs the drag.
 
 ### Insert method
 

@@ -7,18 +7,31 @@ favorites, and recently used emojis.
 
 import sys
 import os
+import atexit
 import json
 import configparser
+import re
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLineEdit,
     QPushButton, QScrollArea, QGridLayout, QLabel, QFrame,
     QGraphicsDropShadowEffect, QToolButton
 )
-from PyQt6.QtCore import Qt, QTimer, QEvent, pyqtSignal, QSize
+from PyQt6.QtCore import (
+    Qt, QTimer, QEvent, QObject, QRect, QSize,
+    pyqtSignal, pyqtSlot, pyqtClassInfo,
+)
 from PyQt6.QtGui import QFont, QColor, QKeySequence, QShortcut, QCursor, QPixmap, QImage, QIcon
+
+try:
+    from PyQt6.QtDBus import QDBus, QDBusConnection, QDBusMessage
+except ImportError:
+    # Without QtDBus the window can't be placed on Wayland. Everything else
+    # works, so this is not fatal — the pin button just stays hidden.
+    QDBusConnection = None
 
 import cairo
 import gi
@@ -223,6 +236,8 @@ DEFAULT_CONFIG = {
     "language": "en",
     "kaomoji": False,
     "theme": "auto",  # "auto" (follow KDE accent color), "dark" (built-in)
+    "remember_position": False,  # reopen where the window was last pinned
+    "window_position": None,  # [x, y] of the pinned position, in screen pixels
 }
 
 
@@ -427,6 +442,214 @@ def insert_emoji(emoji, method="auto", shortcut=DEFAULT_PASTE_SHORTCUT):
     return False
 
 
+# A Wayland client can't put its own window anywhere: move() is silently
+# dropped and pos() reports a coordinate Qt invented. KWin will do it on
+# request though, so the position is read and written through a throwaway
+# script loaded into KWin's script engine. The script finds our window by PID
+# and reports the result back over D-Bus, which is why every answer arrives
+# asynchronously rather than as a return value.
+
+KWIN_SERVICE = "org.kde.KWin"
+KWIN_SCRIPTING_PATH = "/Scripting"
+KWIN_SCRIPTING_IFACE = "org.kde.kwin.Scripting"
+KWIN_SCRIPT_IFACE = "org.kde.kwin.Script"
+
+PLACER_PATH = "/geometry"
+PLACER_IFACE = "org.kde.emojipicker.Geometry"
+
+# Reports "<x> <y>" once it has our window, or "none" when KWin doesn't know
+# about it (yet) — a window takes a moment to reach the compositor after
+# show(). Anything other than a position has to be a word rather than an empty
+# string, which KWin's callDBus quietly drops instead of passing on.
+KWIN_SCRIPT = """
+var target = null;
+try {
+    var windows = workspace.windowList();
+    for (var i = 0; i < windows.length; i++) {
+        if (windows[i].pid === %(pid)d && windows[i].normalWindow) {
+            target = windows[i];
+            break;
+        }
+    }
+    if (target !== null) {
+        %(move)s
+        var geometry = target.frameGeometry;
+        callDBus("%(service)s", "%(path)s", "%(iface)s", "Report",
+                 Math.round(geometry.x) + " " + Math.round(geometry.y));
+    } else {
+        callDBus("%(service)s", "%(path)s", "%(iface)s", "Report", "none");
+    }
+} catch (error) {
+    callDBus("%(service)s", "%(path)s", "%(iface)s", "Report", "none");
+}
+"""
+
+KWIN_MOVE = """var previous = target.frameGeometry;
+        target.frameGeometry = {
+            x: %d, y: %d, width: previous.width, height: previous.height
+        };"""
+
+# How many times a script may be handed to KWin before a usable id comes back
+LOAD_ATTEMPTS = 8
+
+# How often and for how long a restore keeps asking KWin to place the window.
+# KWin needs a few goes before it knows about a window that was just shown.
+RESTORE_TRIES = 6
+RESTORE_INTERVAL_MS = 80
+RESTORE_TIMEOUT_MS = 700
+
+
+@pyqtClassInfo("D-Bus Interface", PLACER_IFACE)
+class KWinPlacer(QObject):
+    """Reads and sets the window position by way of KWin's scripting service."""
+
+    reported = pyqtSignal(int, int)  # position after the script ran
+    lost = pyqtSignal()  # KWin has no window of ours
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._bus = QDBusConnection.sessionBus()
+        self._script_count = 0
+        # KWin reads a script file when it runs it, not when it is handed the
+        # path, so the files have to outlive the calls — they go when we do.
+        self._script_dir = tempfile.mkdtemp(prefix="emoji-picker-")
+        atexit.register(shutil.rmtree, self._script_dir, ignore_errors=True)
+        # Scripts KWin still holds. They are kept for as long as the picker
+        # runs and handed back in one go when it quits: KWin hands out script
+        # ids by the size of its script list, so unloading one mid-session
+        # makes the next id collide with a script that is still loaded, and
+        # every call after that runs the wrong script.
+        self._loaded = set()
+        application = QApplication.instance()
+        if application is not None:
+            application.aboutToQuit.connect(self.unload_all)
+        # KWin calls back into this name, so it has to be unique per process
+        service = "org.kde.emojipicker.p%d" % os.getpid()
+        self._ready = bool(
+            self._bus.registerService(service)
+            and self._bus.registerObject(
+                PLACER_PATH, self, QDBusConnection.RegisterOption.ExportAllSlots
+            )
+        )
+        self._service = service
+
+    @staticmethod
+    def usable():
+        """True when there is a KWin on the session bus to talk to."""
+        if QDBusConnection is None:
+            return False
+        bus = QDBusConnection.sessionBus()
+        if not bus.isConnected():
+            return False
+        interface = bus.interface()
+        if interface is None:
+            return False
+        return bool(interface.isServiceRegistered(KWIN_SERVICE).value())
+
+    def read_position(self):
+        return self._run("")
+
+    def move_to(self, x, y):
+        return self._run(KWIN_MOVE % (x, y))
+
+    def _run(self, move):
+        if not self._ready:
+            return False
+        script = KWIN_SCRIPT % {
+            "pid": os.getpid(),
+            "move": move,
+            "service": self._service,
+            "path": PLACER_PATH,
+            "iface": PLACER_IFACE,
+        }
+        self._script_count += 1
+        name = "emoji-picker-%d-%d" % (os.getpid(), self._script_count)
+        path = os.path.join(self._script_dir, "%s.js" % name)
+        try:
+            with open(path, "w") as script_file:
+                script_file.write(script)
+        except IOError:
+            return False
+
+        script_id = self._load(path, name)
+        if script_id is None:
+            return False
+        # Fire and forget: KWin runs the script inside this call, and a
+        # blocking wait here would swallow the answer the script sends back.
+        self._send("%s/Script%d" % (KWIN_SCRIPTING_PATH, script_id),
+                   KWIN_SCRIPT_IFACE, "run", [])
+        return True
+
+    def _load(self, path, name):
+        """Hand a script to KWin and return an id whose object path is really
+        ours, or None.
+
+        KWin numbers a new script by the length of its script list, so once
+        anything has been unloaded the number can land on a script that is
+        still there. The path then stays with that older script and running it
+        does nothing of ours, without a word of complaint. Every load moves the
+        number along, so keep loading until it lands somewhere free."""
+        for attempt in range(LOAD_ATTEMPTS):
+            taken = self._script_ids()
+            unique = "%s-%d" % (name, attempt)
+            script_id = self._call(KWIN_SCRIPTING_PATH, KWIN_SCRIPTING_IFACE,
+                                   "loadScript", [path, unique])
+            if script_id is None:
+                return None
+            self._loaded.add(unique)
+            if script_id not in taken:
+                return script_id
+        return None
+
+    def _script_ids(self):
+        """The ids of the scripts KWin currently has an object path for."""
+        listing = self._call(KWIN_SCRIPTING_PATH, "org.freedesktop.DBus.Introspectable",
+                             "Introspect", [])
+        if not isinstance(listing, str):
+            return set()
+        return {int(found) for found in re.findall(r'node name="Script(\d+)"', listing)}
+
+    def unload_all(self):
+        """Hand back every script KWin still holds for us. Blocking, because
+        this runs while the picker is on its way out and a queued call would
+        never make it onto the bus."""
+        for name in sorted(self._loaded):
+            self._call(KWIN_SCRIPTING_PATH, KWIN_SCRIPTING_IFACE,
+                       "unloadScript", [name], timeout=300)
+        self._loaded.clear()
+
+    def _call(self, path, interface, method, arguments, timeout=1000):
+        """Blocking call into KWin, for when the answer is the point. Returns
+        the first return value, or None if the call failed."""
+        reply = self._bus.call(self._message(path, interface, method, arguments),
+                               QDBus.CallMode.Block, timeout)
+        if reply.type() != QDBusMessage.MessageType.ReplyMessage:
+            return None
+        values = reply.arguments()
+        return values[0] if values else True
+
+    def _send(self, path, interface, method, arguments):
+        """Call into KWin without waiting around for a reply."""
+        self._bus.call(self._message(path, interface, method, arguments),
+                       QDBus.CallMode.NoBlock)
+
+    @staticmethod
+    def _message(path, interface, method, arguments):
+        message = QDBusMessage.createMethodCall(KWIN_SERVICE, path, interface, method)
+        message.setArguments(arguments)
+        return message
+
+    @pyqtSlot(str)
+    def Report(self, payload):
+        parts = payload.split()
+        try:
+            x, y = int(parts[0]), int(parts[1])
+        except (IndexError, ValueError):
+            self.lost.emit()
+            return
+        self.reported.emit(x, y)
+
+
 class SkinToneButton(QPushButton):
     """A small circular button for skin tone selection."""
     def __init__(self, tone, color, tooltip, parent=None):
@@ -486,6 +709,42 @@ class GenderButton(QPushButton):
                 border-radius: 10px;
                 color: #dbdee1;
                 font-size: 10px;
+                padding: 0px;
+            }}
+            QPushButton:hover {{
+                background: rgba(255, 255, 255, 0.12);
+                border: 2px solid rgba(255, 255, 255, 0.3);
+            }}
+        """)
+
+
+class PinButton(QPushButton):
+    """A small pin that toggles whether the window position is remembered."""
+    def __init__(self, tooltip, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(20, 20)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setCheckable(True)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.setToolTip(tooltip)
+        self.setIcon(QIcon(render_emoji_pixmap("📌", 14)))
+        self.setIconSize(QSize(14, 14))
+        self._refresh_style()
+
+    def setChecked(self, checked):
+        super().setChecked(checked)
+        self._refresh_style()
+
+    def _refresh_style(self):
+        if self.isChecked():
+            bg, border = accent_rgba(0.3), f"2px solid {accent_hex()}"
+        else:
+            bg, border = "rgba(255,255,255,0.06)", "2px solid transparent"
+        self.setStyleSheet(f"""
+            QPushButton {{
+                background: {bg};
+                border: {border};
+                border-radius: 10px;
                 padding: 0px;
             }}
             QPushButton:hover {{
@@ -735,6 +994,28 @@ class EmojiPicker(QWidget):
         # Status text to restore when the collected emojis are taken back
         self._base_status = ""
 
+        # Window placement. X11 can do it with plain move()/pos(); Wayland
+        # can't and has to go through KWin.
+        self._native_placement = QApplication.instance().platformName() != "wayland"
+        self._placer = None
+        if not self._native_placement and KWinPlacer.usable():
+            self._placer = KWinPlacer(self)
+            self._placer.reported.connect(self._on_position)
+            self._placer.lost.connect(self._on_position_lost)
+        self._pinned = bool(self.config.get("remember_position", False))
+        self._moving = False
+        self._restore_target = None
+        self._restore_tries = 0
+
+        # Nothing tells a client when a compositor-driven drag has ended, so
+        # after one the position is polled until it stops changing.
+        self._position_timer = QTimer(self)
+        self._position_timer.setInterval(400)
+        self._position_timer.timeout.connect(self._poll_position)
+        self._poll_ticks = 0
+        self._poll_last = None
+        self._poll_stable = 0
+
         # Debounce timer for search
         self._search_timer = QTimer()
         self._search_timer.setSingleShot(True)
@@ -745,6 +1026,15 @@ class EmojiPicker(QWidget):
         self.setup_ui()
         self.setup_shortcuts()
         self.show_category("recent")
+
+        if self._pinned and self.config.get("window_position") and self._placer:
+            # KWin can only move a window that already exists, so a restore
+            # would show the window at its default spot for a frame or two
+            # first. Keep the contents hidden until it has landed — the window
+            # itself has a translucent background and draws nothing on its own.
+            # (setWindowOpacity() would be the obvious way and does nothing on
+            # Wayland.)
+            self.container.hide()
 
     def setup_ui(self):
         self.setWindowTitle("Emoji Picker")
@@ -829,6 +1119,14 @@ class EmojiPicker(QWidget):
             btn.clicked.connect(lambda checked, gender=gender: self.set_gender(gender))
             search_row.addWidget(btn)
             self.gender_buttons.append(btn)
+
+        self.pin_button = None
+        if self._positioning_available():
+            search_row.addSpacing(6)
+            self.pin_button = PinButton(self._pin_tooltip())
+            self.pin_button.setChecked(self._pinned)
+            self.pin_button.clicked.connect(self.toggle_pin)
+            search_row.addWidget(self.pin_button)
 
         layout.addLayout(search_row)
 
@@ -957,6 +1255,160 @@ class EmojiPicker(QWidget):
             x = (geo.width() - self.width()) // 2 + geo.x()
             y = (geo.height() - self.height()) // 2 + geo.y()
             self.move(x, y)
+
+    def _positioning_available(self):
+        """Whether this session lets the window be put where we want it."""
+        return self._native_placement or self._placer is not None
+
+    def _pin_tooltip(self):
+        return t(self.locale, "pin_forget" if self._pinned else "pin_remember")
+
+    def toggle_pin(self, checked):
+        """Start or stop remembering where the window sits."""
+        self._pinned = checked
+        self.config["remember_position"] = checked
+        if checked:
+            # Take down where the window is now. On Wayland the answer comes
+            # back later, through _on_position, and saves itself there.
+            self.status.setText(t(self.locale, "status_pinned"))
+            self._watch_position()
+        else:
+            self.config["window_position"] = None
+            self.status.setText(t(self.locale, "status_unpinned"))
+        save_config(self.config)
+        self.pin_button.setToolTip(self._pin_tooltip())
+
+    def mousePressEvent(self, event):
+        """Drag the window by any empty spot of its chrome. A Wayland client
+        can't move itself, so the compositor is asked to run the drag."""
+        if event.button() == Qt.MouseButton.LeftButton:
+            handle = self.windowHandle()
+            if handle is not None and handle.startSystemMove():
+                # Should the compositor deactivate the window to run the drag,
+                # that must not read as a click outside. It would happen right
+                # at the start, so the guard is only held for a moment —
+                # holding it longer would keep a plain click on the background
+                # from ever letting the window close again.
+                self._moving = True
+                QTimer.singleShot(400, self._clear_moving)
+                self._watch_position()
+                event.accept()
+                return
+        super().mousePressEvent(event)
+
+    def _clear_moving(self):
+        self._moving = False
+
+    def _watch_position(self):
+        """Follow the window until it settles, saving the position as it goes.
+
+        A compositor-driven drag reports nothing back to the client: no move
+        events, no release, no end. Polling is the only way to find out where
+        the window was dropped."""
+        if not self._pinned or not self._positioning_available():
+            return
+        self._poll_ticks = 0
+        self._poll_last = None
+        self._poll_stable = 0
+        self._position_timer.start()
+        self._read_position()
+
+    def _poll_position(self):
+        self._poll_ticks += 1
+        if self._poll_ticks > 25:  # ten seconds of dragging, then give up
+            self._position_timer.stop()
+            return
+        self._read_position()
+
+    def _read_position(self):
+        """Ask where the window is. X11 answers at once, Wayland answers late."""
+        if self._native_placement:
+            point = self.pos()
+            self._on_position(point.x(), point.y())
+        elif self._placer is not None:
+            self._placer.read_position()
+
+    def _on_position(self, x, y):
+        """A position came back, either from KWin or straight from Qt."""
+        self._finish_restore()
+        if self._position_timer.isActive():
+            if (x, y) == self._poll_last:
+                self._poll_stable += 1
+                if self._poll_stable >= 2:
+                    self._position_timer.stop()
+            else:
+                self._poll_last = (x, y)
+                self._poll_stable = 0
+        if self._pinned and self.config.get("window_position") != [x, y]:
+            self.config["window_position"] = [x, y]
+            save_config(self.config)
+
+    def _on_position_lost(self):
+        """KWin has no window of ours. Straight after show() that only means it
+        hasn't reached the compositor yet, so a restore tries again."""
+        if self._restore_target is None:
+            return
+        if self._restore_tries < RESTORE_TRIES:
+            QTimer.singleShot(30, self._attempt_restore)
+        else:
+            self._finish_restore()
+
+    def _attempt_restore(self):
+        if self._restore_target is None:
+            return
+        self._restore_tries += 1
+        attempt = self._restore_tries
+        self._placer.move_to(*self._restore_target)
+        # KWin does now and then swallow a script without a word, so don't sit
+        # waiting for an answer that may never come.
+        QTimer.singleShot(RESTORE_INTERVAL_MS, lambda: self._restore_again(attempt))
+
+    def _restore_again(self, attempt):
+        # Only the most recent attempt may start the next one, otherwise a
+        # timeout and a late answer from KWin would both fire off a retry
+        if (self._restore_target is not None
+                and attempt == self._restore_tries
+                and attempt < RESTORE_TRIES):
+            self._attempt_restore()
+
+    def _restore_position(self):
+        """Put the window back where it was pinned. Returns False when there is
+        nothing to restore and the caller should center it instead."""
+        saved = self.config.get("window_position")
+        if not self._pinned or not saved or not self._positioning_available():
+            return False
+        try:
+            x, y = self._clamp_to_screen(int(saved[0]), int(saved[1]))
+        except (TypeError, ValueError, IndexError):
+            return False
+        if self._native_placement:
+            self.move(x, y)
+            return True
+        self._restore_target = (x, y)
+        self._restore_tries = 0
+        self._attempt_restore()
+        # However the restore turns out, the contents must not stay hidden
+        QTimer.singleShot(RESTORE_TIMEOUT_MS, self._finish_restore)
+        return True
+
+    def _finish_restore(self):
+        self._restore_target = None
+        if self.container.isHidden():
+            self.container.show()
+
+    def _clamp_to_screen(self, x, y):
+        """Fall back to the center when the remembered spot is off-screen, the
+        way it can be after the monitor layout changed."""
+        rect = QRect(x, y, self.width(), self.height())
+        for screen in QApplication.screens():
+            if screen.availableGeometry().intersects(rect):
+                return x, y
+        screen = QApplication.primaryScreen()
+        if screen is None:
+            return x, y
+        geometry = screen.availableGeometry()
+        return (geometry.x() + (geometry.width() - self.width()) // 2,
+                geometry.y() + (geometry.height() - self.height()) // 2)
 
     def _apply_modifiers(self, emojis):
         """Apply skin tone and/or gender modifiers to compatible emojis."""
@@ -1200,7 +1652,8 @@ class EmojiPicker(QWidget):
         # already the narrower one whenever a bar happens to be visible.
         self.emoji_grid.setMaximumWidth(self.scroll.width() - SCROLLBAR_WIDTH)
         self.search.setFocus()
-        self.center_on_screen()
+        if not self._restore_position():
+            self.center_on_screen()
 
     def focusOutEvent(self, event):
         super().focusOutEvent(event)
@@ -1250,9 +1703,12 @@ class EmojiPicker(QWidget):
             QTimer.singleShot(0, lambda: self.emoji_grid.focus_button(0))
 
     def changeEvent(self, event):
-        """Close when window loses focus (unless we're inserting an emoji)."""
+        """Close when window loses focus (unless we're inserting an emoji or
+        the compositor is dragging the window around)."""
         if event.type() == QEvent.Type.ActivationChange:
-            if not self.isActiveWindow() and not getattr(self, '_inserting', False):
+            if self.isActiveWindow():
+                self._moving = False
+            elif not getattr(self, '_inserting', False) and not self._moving:
                 QTimer.singleShot(100, self.close)
         super().changeEvent(event)
 
