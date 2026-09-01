@@ -22,7 +22,7 @@ Built because the default KDE emoji picker can't directly insert emojis under Wa
 - ✅ **Keyboard navigation** — fully operable without a mouse
 - ✅ **Color emojis** — rendered via Cairo/Pango (not Qt's broken text rendering)
 - ✅ **Dark theme** — with the accent color picked up from your KDE settings
-- ✅ **Movable window** — drag it anywhere, and pin 📌 the spot so it opens there next time
+- ✅ **Movable window** — drag it anywhere, and pin the spot so it opens there next time
 - ✅ **Focus-loss close** — click outside to dismiss
 - ✅ **Lightweight** — no daemon, no background process, starts on demand
 
@@ -113,7 +113,7 @@ Set up a global shortcut in KDE:
 | **Escape** | Close the picker (inserts collected emojis in multi-insert mode) |
 | **Click outside** | Close the picker (same) |
 | **Drag** the background | Move the window — see [window position](#window-position) |
-| **Click** the pin 📌 | Open at this spot from now on |
+| **Click** the pin | Open at this spot from now on |
 
 ### Keyboard navigation
 
@@ -172,8 +172,9 @@ To use German, set `"language": "de"`. Custom languages can be added by creating
 
 The picker opens centered. Drag it by any empty spot of its background — next to
 the category buttons, or the strip along the bottom — and it goes where you put
-it. That much is one-off; the pin 📌 next to the skin tone and gender buttons is
-what makes it stick. Pin it once and every later launch opens at that spot, drag
+it. That much is one-off; the pin next to the skin tone and gender buttons is
+what makes it stick. A struck-through pin means the position isn't kept, an
+upright one on the accent color means it is. Pin it once and every later launch opens at that spot, drag
 it again while pinned and the new spot is the one that's kept. Clicking the pin
 again forgets the position and the picker goes back to opening centered.
 
@@ -284,3 +285,8 @@ Color emoji rendering uses **Cairo/Pango** instead of Qt's text engine, because 
 ## License
 
 MIT License — see [LICENSE](LICENSE) for details.
+
+The two pin icons are `keep` and `keep_off` from Google's
+[Material Symbols](https://fonts.google.com/icons), used under the Apache
+License 2.0. Their outlines are drawn straight from the glyph paths, so no font
+or icon file has to be installed.

@@ -24,7 +24,10 @@ from PyQt6.QtCore import (
     Qt, QTimer, QEvent, QObject, QRect, QSize,
     pyqtSignal, pyqtSlot, pyqtClassInfo,
 )
-from PyQt6.QtGui import QFont, QColor, QKeySequence, QShortcut, QCursor, QPixmap, QImage, QIcon
+from PyQt6.QtGui import (
+    QFont, QColor, QKeySequence, QShortcut, QCursor, QPixmap, QImage, QIcon,
+    QPainter, QPainterPath,
+)
 
 try:
     from PyQt6.QtDBus import QDBus, QDBusConnection, QDBusMessage
@@ -147,6 +150,100 @@ def render_run_pixmap(text, height=20):
     surface.write_to_png(buf)
     pixmap = QPixmap()
     pixmap.loadFromData(buf.getvalue(), "PNG")
+    return pixmap
+
+
+# The Material Symbols "keep" and "keep_off" glyphs, outlined, 24px. Taken at
+# weight 700 rather than the default 400: at the 14 pixels they are drawn here
+# the lighter outline all but disappears. Both are drawn on a "0 -960 960 960"
+# viewBox, so y runs from -960 at the top down to 0.
+MATERIAL_KEEP = (
+    "m674-515 80 80v127H543v236L480-9l-63-63v-236H206v-127l80-80v-254h-40v-126"
+    "h468v126h-40v254Zm-291 81h194l-29-29v-306H412v306l-29 29Zm97 0Z"
+)
+MATERIAL_KEEP_OFF = (
+    "M714-895v126h-40v321L548-574v-195H412v60l-59-60-107-107v-19h468ZM480-9l-63"
+    "-63v-236H206v-127l80-80v-49L13-840l67-66 794 794-67 67-263-263-1 2v234L480"
+    "-9Zm-98-425h35l-19-18-16 18Zm98-208Zm-82 190Z"
+)
+
+_material_pixmap_cache = {}
+
+
+def material_path(data):
+    """Turn one Material Symbols path into a QPainterPath.
+
+    These glyphs are plain polygons — moves, lines and closes, no curves — so
+    reading those few commands is enough, and it saves a dependency on QtSvg,
+    which Debian's PyQt6 package doesn't ship."""
+    tokens = re.findall(r"[A-Za-z]|-?\d*\.?\d+", data)
+    path = QPainterPath()
+    x = y = start_x = start_y = 0.0
+    command = "M"
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        if token.isalpha():
+            command = token
+            index += 1
+            if command in ("Z", "z"):
+                path.closeSubpath()
+                x, y = start_x, start_y
+            continue
+        if command in ("M", "m", "L", "l"):
+            first, second = float(tokens[index]), float(tokens[index + 1])
+            index += 2
+            x, y = (x + first, y + second) if command.islower() else (first, second)
+            if command in ("M", "m"):
+                path.moveTo(x, y)
+                start_x, start_y = x, y
+                # Coordinates following a moveto are a line, not another move
+                command = "l" if command == "m" else "L"
+            else:
+                path.lineTo(x, y)
+        elif command in ("H", "h"):
+            value = float(tokens[index])
+            index += 1
+            x = x + value if command == "h" else value
+            path.lineTo(x, y)
+        elif command in ("V", "v"):
+            value = float(tokens[index])
+            index += 1
+            y = y + value if command == "v" else value
+            path.lineTo(x, y)
+        else:  # a curve would land here, and none of these glyphs has one
+            index += 1
+    return path
+
+
+def render_material_icon(data, size, color):
+    """Render a Material Symbols glyph to a QPixmap in the given color.
+
+    Drawn at the screen's own pixel density and told about it, so it comes out
+    sharp on a HiDPI screen and stays the size it was asked for on any other.
+    Getting that ratio wrong makes QIcon hand the button a pixmap in the wrong
+    units, which it then draws too large and clips."""
+    screen = QApplication.primaryScreen()
+    ratio = screen.devicePixelRatio() if screen else 1.0
+    key = (data, size, color, ratio)
+    if key in _material_pixmap_cache:
+        return _material_pixmap_cache[key]
+
+    edge = max(1, round(size * ratio))
+    pixmap = QPixmap(edge, edge)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    pixmap.setDevicePixelRatio(ratio)
+
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.translate(0, edge)
+    painter.scale(edge / 960.0, edge / 960.0)
+    path = material_path(data)
+    path.setFillRule(Qt.FillRule.WindingFill)
+    painter.fillPath(path, QColor(color))
+    painter.end()
+
+    _material_pixmap_cache[key] = pixmap
     return pixmap
 
 
@@ -719,7 +816,13 @@ class GenderButton(QPushButton):
 
 
 class PinButton(QPushButton):
-    """A small pin that toggles whether the window position is remembered."""
+    """A small pin that toggles whether the window position is remembered.
+
+    Unlike the skin tone and gender buttons this one stands alone, so it can't
+    lean on its neighbours to show which state it is in. It says so twice
+    instead: a struck-through pin and no background when the position isn't
+    kept, an upright pin on the accent color when it is."""
+
     def __init__(self, tooltip, parent=None):
         super().__init__(parent)
         self.setFixedSize(20, 20)
@@ -727,29 +830,29 @@ class PinButton(QPushButton):
         self.setCheckable(True)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setToolTip(tooltip)
-        self.setIcon(QIcon(render_emoji_pixmap("📌", 14)))
         self.setIconSize(QSize(14, 14))
-        self._refresh_style()
-
-    def setChecked(self, checked):
-        super().setChecked(checked)
+        # setChecked() isn't virtual, so a click would change the state behind
+        # the style's back. The signal catches both that and setChecked().
+        self.toggled.connect(self._refresh_style)
         self._refresh_style()
 
     def _refresh_style(self):
         if self.isChecked():
-            bg, border = accent_rgba(0.3), f"2px solid {accent_hex()}"
+            icon, color = MATERIAL_KEEP, "#dbdee1"
+            background, border = accent_rgba(0.3), f"2px solid {accent_hex()}"
         else:
-            bg, border = "rgba(255,255,255,0.06)", "2px solid transparent"
+            icon, color = MATERIAL_KEEP_OFF, "#8b8d93"
+            background, border = "transparent", "2px solid transparent"
+        self.setIcon(QIcon(render_material_icon(icon, 14, color)))
         self.setStyleSheet(f"""
             QPushButton {{
-                background: {bg};
+                background: {background};
                 border: {border};
                 border-radius: 10px;
                 padding: 0px;
             }}
             QPushButton:hover {{
                 background: rgba(255, 255, 255, 0.12);
-                border: 2px solid rgba(255, 255, 255, 0.3);
             }}
         """)
 
