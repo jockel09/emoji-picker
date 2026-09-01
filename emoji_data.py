@@ -63,6 +63,10 @@ EMOJI_CATEGORIES = {
         ("💫", "dizzy"), ("💦", "sweat droplets"), ("💨", "dashing away"),
         ("🕳️", "hole"), ("💬", "speech balloon"), ("🗯️", "right anger bubble"),
         ("💭", "thought balloon"), ("🗨️", "left speech bubble"), ("💤", "zzz"),
+        # Filling the gaps in RGI coverage
+        ("☺️", "smiling face"), ("😮‍💨", "face exhaling"), ("🤧", "sneezing face"), ("😵‍💫", "face with spiral eyes"),
+        ("☹️", "frowning face"), ("🙈", "see-no-evil monkey"), ("🙉", "hear-no-evil monkey"), ("🙊", "speak-no-evil monkey"),
+        ("💌", "love letter"), ("❣️", "heart exclamation"), ("💋", "kiss mark"), ("👁️‍🗨️", "eye in speech bubble"),
     ],
     "people": [
         ("👋", "waving hand"), ("🤚", "raised back of hand"), ("🖐️", "hand with fingers splayed"),
@@ -125,6 +129,27 @@ EMOJI_CATEGORIES = {
         ("🧑‍🧑‍🧒‍🧒", "family: adult, adult, child, child"),
         ("🗣️", "speaking head"), ("👤", "bust in silhouette"), ("👥", "busts in silhouette"),
         ("🫂", "people hugging"), ("👣", "footprints"), ("🫆", "fingerprint"),
+        # Filling the gaps in RGI coverage
+        ("🧑‍🦰", "person with red hair"), ("🧑‍🦱", "person with curly hair"), ("🧑‍🦳", "person with white hair"),
+        ("🧑‍🦲", "person with bald"), ("🙇", "person bowing"), ("🧑‍⚕️", "health worker"), ("🧑‍🎓", "student"),
+        ("🧑‍🏫", "teacher"), ("🧑‍⚖️", "judge"), ("🧑‍🌾", "farmer"), ("🧑‍🍳", "cook"), ("🧑‍🔧", "mechanic"),
+        ("🧑‍🏭", "factory worker"), ("🧑‍💼", "office worker"), ("🧑‍🔬", "scientist"), ("🧑‍💻", "technologist"),
+        ("🧑‍🎤", "singer"), ("🧑‍🎨", "artist"), ("🧑‍✈️", "pilot"), ("🧑‍🚀", "astronaut"), ("🧑‍🚒", "firefighter"),
+        ("🫃", "pregnant man"), ("🧑‍🍼", "person feeding baby"), ("🧑‍🎄", "Mx Claus"), ("🧑‍🦯", "person with white cane"),
+        ("🧑‍🦼", "person in motorized wheelchair"), ("🧑‍🦽", "person in manual wheelchair"), ("🏌️", "person golfing"),
+        ("🏄", "person surfing"), ("🚣", "person rowing boat"), ("🏊", "person swimming"), ("⛹️", "person bouncing ball"),
+        ("🚴", "person biking"), ("🚵", "person mountain biking"), ("🛀", "person taking bath"), ("🛌", "person in bed"),
+        ("🧑‍🤝‍🧑", "people holding hands"), ("👩‍❤️‍💋‍👨", "kiss woman and man"), ("👨‍❤️‍💋‍👨", "kiss man and man"),
+        ("👩‍❤️‍💋‍👩", "kiss woman and woman"), ("👩‍❤️‍👨", "couple with heart woman and man"), ("👨‍❤️‍👨", "couple with heart man and man"),
+        ("👩‍❤️‍👩", "couple with heart woman and woman"), ("👨‍👩‍👦", "family man, woman, boy"), ("👨‍👩‍👧", "family man, woman, girl"),
+        ("👨‍👩‍👧‍👦", "family man, woman, girl, boy"), ("👨‍👩‍👦‍👦", "family man, woman, boy, boy"), ("👨‍👩‍👧‍👧", "family man, woman, girl, girl"),
+        ("👨‍👨‍👦", "family man, man, boy"), ("👨‍👨‍👧", "family man, man, girl"), ("👨‍👨‍👧‍👦", "family man, man, girl, boy"),
+        ("👨‍👨‍👦‍👦", "family man, man, boy, boy"), ("👨‍👨‍👧‍👧", "family man, man, girl, girl"), ("👩‍👩‍👦", "family woman, woman, boy"),
+        ("👩‍👩‍👧", "family woman, woman, girl"), ("👩‍👩‍👧‍👦", "family woman, woman, girl, boy"), ("👩‍👩‍👦‍👦", "family woman, woman, boy, boy"),
+        ("👩‍👩‍👧‍👧", "family woman, woman, girl, girl"), ("👨‍👦", "family man, boy"), ("👨‍👦‍👦", "family man, boy, boy"),
+        ("👨‍👧", "family man, girl"), ("👨‍👧‍👦", "family man, girl, boy"), ("👨‍👧‍👧", "family man, girl, girl"),
+        ("👩‍👦", "family woman, boy"), ("👩‍👦‍👦", "family woman, boy, boy"), ("👩‍👧", "family woman, girl"),
+        ("👩‍👧‍👦", "family woman, girl, boy"), ("👩‍👧‍👧", "family woman, girl, girl"),
     ],
     "animals": [
         ("🐵", "monkey face"), ("🐒", "monkey"), ("🦍", "gorilla"),
@@ -181,6 +206,8 @@ EMOJI_CATEGORIES = {
         ("🍁", "maple leaf"), ("🍂", "fallen leaf"), ("🍃", "leaf fluttering in wind"),
         ("🪹", "empty nest"), ("🪺", "nest with eggs"), ("🍄", "mushroom"),
         ("🍄‍🟫", "brown mushroom"),
+        # Filling the gaps in RGI coverage
+        ("🦠", "microbe"), ("💮", "white flower"), ("🏵️", "rosette"),
     ],
     "food": [
         ("🍇", "grapes"), ("🍈", "melon"), ("🍉", "watermelon"),
@@ -229,6 +256,8 @@ EMOJI_CATEGORIES = {
         ("🧃", "beverage box"), ("🧉", "mate"), ("🧊", "ice"),
         ("🥢", "chopsticks"), ("🍽️", "fork and knife with plate"), ("🍴", "fork and knife"),
         ("🥄", "spoon"), ("🔪", "kitchen knife"), ("🫙", "jar"),
+        # Filling the gaps in RGI coverage
+        ("🏺", "amphora"),
     ],
     "travel": [
         ("🌍", "globe europe-africa"), ("🌎", "globe americas"), ("🌏", "globe asia-australia"),
@@ -288,6 +317,20 @@ EMOJI_CATEGORIES = {
         ("⚡", "high voltage"), ("❄️", "snowflake"), ("☃️", "snowman"),
         ("⛄", "snowman without snow"), ("☄️", "comet"), ("🔥", "fire"),
         ("💧", "droplet"), ("🌊", "water wave"),
+        # Filling the gaps in RGI coverage
+        ("🌐", "globe with meridians"), ("🗾", "map of Japan"), ("🧭", "compass"), ("🏤", "post office"),
+        ("♨️", "hot springs"), ("💈", "barber pole"), ("🎪", "circus tent"), ("🦽", "manual wheelchair"),
+        ("🦼", "motorized wheelchair"), ("🛹", "skateboard"), ("🛼", "roller skate"), ("🛤️", "railway track"),
+        ("🛢️", "oil drum"), ("🛞", "wheel"), ("🛑", "stop sign"), ("🛶", "canoe"), ("🛎️", "bellhop bell"),
+        ("🧳", "luggage"), ("⌛", "hourglass done"), ("⏳", "hourglass not done"), ("⌚", "watch"), ("⏰", "alarm clock"),
+        ("⏱️", "stopwatch"), ("⏲️", "timer clock"), ("🕰️", "mantelpiece clock"), ("🕛", "twelve o'clock"),
+        ("🕧", "twelve-thirty"), ("🕐", "one o'clock"), ("🕜", "one-thirty"), ("🕑", "two o'clock"), ("🕝", "two-thirty"),
+        ("🕒", "three o'clock"), ("🕞", "three-thirty"), ("🕓", "four o'clock"), ("🕟", "four-thirty"),
+        ("🕔", "five o'clock"), ("🕠", "five-thirty"), ("🕕", "six o'clock"), ("🕡", "six-thirty"), ("🕖", "seven o'clock"),
+        ("🕢", "seven-thirty"), ("🕗", "eight o'clock"), ("🕣", "eight-thirty"), ("🕘", "nine o'clock"),
+        ("🕤", "nine-thirty"), ("🕙", "ten o'clock"), ("🕥", "ten-thirty"), ("🕚", "eleven o'clock"),
+        ("🕦", "eleven-thirty"), ("🌡️", "thermometer"), ("🪐", "ringed planet"), ("☁️", "cloud"), ("⛈️", "cloud with lightning and rain"),
+        ("🌂", "closed umbrella"),
     ],
     "activities": [
         ("🎃", "jack-o-lantern"), ("🎄", "Christmas tree"), ("🎆", "fireworks"),
@@ -408,6 +451,11 @@ EMOJI_CATEGORIES = {
         ("🧻", "roll of paper"), ("🪣", "bucket"), ("🧼", "soap"),
         ("🫧", "bubbles"), ("🪥", "toothbrush"), ("🧽", "sponge"),
         ("🧯", "fire extinguisher"), ("🛒", "shopping cart"),
+        # Filling the gaps in RGI coverage
+        ("🔇", "muted speaker"), ("🔈", "speaker low volume"), ("🔉", "speaker medium volume"), ("🔊", "speaker high volume"),
+        ("📢", "loudspeaker"), ("📣", "megaphone"), ("📯", "postal horn"), ("🔔", "bell"), ("🔕", "bell with slash"),
+        ("💹", "chart increasing with yen"), ("💼", "briefcase"), ("🚬", "cigarette"), ("⚰️", "coffin"),
+        ("🪦", "headstone"), ("⚱️", "funeral urn"), ("🗿", "moai"), ("🪧", "placard"), ("🪪", "identification card"),
     ],
     "symbols": [
         ("🏧", "ATM sign"), ("🚮", "litter in bin sign"), ("🚰", "potable water"),
@@ -489,6 +537,10 @@ EMOJI_CATEGORIES = {
         ("🔺", "red triangle pointed up"), ("🔻", "red triangle pointed down"),
         ("💠", "diamond with a dot"), ("🔘", "radio button"),
         ("🔳", "white square button"), ("🔲", "black square button"),
+        # Filling the gaps in RGI coverage
+        ("#️⃣", "keycap #"), ("*️⃣", "keycap *"), ("0️⃣", "keycap 0"), ("1️⃣", "keycap 1"), ("2️⃣", "keycap 2"),
+        ("3️⃣", "keycap 3"), ("4️⃣", "keycap 4"), ("5️⃣", "keycap 5"), ("6️⃣", "keycap 6"), ("7️⃣", "keycap 7"),
+        ("8️⃣", "keycap 8"), ("9️⃣", "keycap 9"),
     ],
     "flags": [
         ("🏳️", "white flag"), ("🏴", "black flag"), ("🏁", "chequered flag"),
@@ -536,6 +588,47 @@ EMOJI_CATEGORIES = {
         ("🇳🇮", "flag Nicaragua"), ("🇸🇻", "flag El Salvador"),
         ("🇨🇶", "flag Sark"),
         ("🇪🇺", "flag European Union"), ("🇺🇳", "flag United Nations"),
+        # Filling the gaps in RGI coverage
+        ("🎌", "crossed flags"), ("🇦🇨", "flag Ascension Island"), ("🇦🇩", "flag Andorra"), ("🇦🇬", "flag Antigua and Barbuda"),
+        ("🇦🇮", "flag Anguilla"), ("🇦🇴", "flag Angola"), ("🇦🇶", "flag Antarctica"), ("🇦🇸", "flag American Samoa"),
+        ("🇦🇼", "flag Aruba"), ("🇦🇽", "flag Åland Islands"), ("🇧🇧", "flag Barbados"), ("🇧🇫", "flag Burkina Faso"),
+        ("🇧🇮", "flag Burundi"), ("🇧🇯", "flag Benin"), ("🇧🇱", "flag Saint Barthélemy"), ("🇧🇲", "flag Bermuda"),
+        ("🇧🇳", "flag Brunei Darussalam"), ("🇧🇶", "flag Bonaire, Sint Eustatius and Saba"), ("🇧🇸", "flag Bahamas"),
+        ("🇧🇹", "flag Bhutan"), ("🇧🇻", "flag Bouvet Island"), ("🇧🇼", "flag Botswana"), ("🇧🇾", "flag Belarus"),
+        ("🇧🇿", "flag Belize"), ("🇨🇨", "flag Cocos (Keeling) Islands"), ("🇨🇩", "flag Congo, The Democratic Republic of the"),
+        ("🇨🇫", "flag Central African Republic"), ("🇨🇬", "flag Congo"), ("🇨🇮", "flag Côte d'Ivoire"),
+        ("🇨🇰", "flag Cook Islands"), ("🇨🇲", "flag Cameroon"), ("🇨🇵", "flag Clipperton Island"), ("🇨🇻", "flag Cabo Verde"),
+        ("🇨🇼", "flag Curaçao"), ("🇨🇽", "flag Christmas Island"), ("🇩🇬", "flag Diego Garcia"), ("🇩🇯", "flag Djibouti"),
+        ("🇩🇲", "flag Dominica"), ("🇪🇦", "flag Ceuta & Melilla"), ("🇪🇭", "flag Western Sahara"), ("🇪🇷", "flag Eritrea"),
+        ("🇫🇯", "flag Fiji"), ("🇫🇰", "flag Falkland Islands (Malvinas)"), ("🇫🇲", "flag Micronesia, Federated States of"),
+        ("🇫🇴", "flag Faroe Islands"), ("🇬🇦", "flag Gabon"), ("🇬🇩", "flag Grenada"), ("🇬🇫", "flag French Guiana"),
+        ("🇬🇬", "flag Guernsey"), ("🇬🇮", "flag Gibraltar"), ("🇬🇱", "flag Greenland"), ("🇬🇲", "flag Gambia"),
+        ("🇬🇳", "flag Guinea"), ("🇬🇵", "flag Guadeloupe"), ("🇬🇶", "flag Equatorial Guinea"), ("🇬🇸", "flag South Georgia and the South Sandwich Islands"),
+        ("🇬🇺", "flag Guam"), ("🇬🇼", "flag Guinea-Bissau"), ("🇬🇾", "flag Guyana"), ("🇭🇲", "flag Heard Island and McDonald Islands"),
+        ("🇮🇨", "flag Canary Islands"), ("🇮🇲", "flag Isle of Man"), ("🇮🇴", "flag British Indian Ocean Territory"),
+        ("🇯🇪", "flag Jersey"), ("🇰🇬", "flag Kyrgyzstan"), ("🇰🇮", "flag Kiribati"), ("🇰🇲", "flag Comoros"),
+        ("🇰🇳", "flag Saint Kitts and Nevis"), ("🇰🇾", "flag Cayman Islands"), ("🇱🇨", "flag Saint Lucia"),
+        ("🇱🇮", "flag Liechtenstein"), ("🇱🇷", "flag Liberia"), ("🇱🇸", "flag Lesotho"), ("🇲🇨", "flag Monaco"),
+        ("🇲🇩", "flag Moldova, Republic of"), ("🇲🇫", "flag Saint Martin (French part)"), ("🇲🇬", "flag Madagascar"),
+        ("🇲🇭", "flag Marshall Islands"), ("🇲🇱", "flag Mali"), ("🇲🇴", "flag Macao"), ("🇲🇵", "flag Northern Mariana Islands"),
+        ("🇲🇶", "flag Martinique"), ("🇲🇷", "flag Mauritania"), ("🇲🇸", "flag Montserrat"), ("🇲🇺", "flag Mauritius"),
+        ("🇲🇻", "flag Maldives"), ("🇲🇼", "flag Malawi"), ("🇲🇿", "flag Mozambique"), ("🇳🇦", "flag Namibia"),
+        ("🇳🇨", "flag New Caledonia"), ("🇳🇪", "flag Niger"), ("🇳🇫", "flag Norfolk Island"), ("🇳🇷", "flag Nauru"),
+        ("🇳🇺", "flag Niue"), ("🇵🇫", "flag French Polynesia"), ("🇵🇬", "flag Papua New Guinea"), ("🇵🇲", "flag Saint Pierre and Miquelon"),
+        ("🇵🇳", "flag Pitcairn"), ("🇵🇷", "flag Puerto Rico"), ("🇵🇸", "flag Palestine, State of"), ("🇵🇼", "flag Palau"),
+        ("🇷🇪", "flag Réunion"), ("🇷🇼", "flag Rwanda"), ("🇸🇧", "flag Solomon Islands"), ("🇸🇨", "flag Seychelles"),
+        ("🇸🇩", "flag Sudan"), ("🇸🇭", "flag Saint Helena, Ascension and Tristan da Cunha"), ("🇸🇯", "flag Svalbard and Jan Mayen"),
+        ("🇸🇱", "flag Sierra Leone"), ("🇸🇲", "flag San Marino"), ("🇸🇴", "flag Somalia"), ("🇸🇷", "flag Suriname"),
+        ("🇸🇸", "flag South Sudan"), ("🇸🇹", "flag Sao Tome and Principe"), ("🇸🇽", "flag Sint Maarten (Dutch part)"),
+        ("🇸🇿", "flag Eswatini"), ("🇹🇦", "flag Tristan da Cunha"), ("🇹🇨", "flag Turks and Caicos Islands"),
+        ("🇹🇩", "flag Chad"), ("🇹🇫", "flag French Southern Territories"), ("🇹🇬", "flag Togo"), ("🇹🇯", "flag Tajikistan"),
+        ("🇹🇰", "flag Tokelau"), ("🇹🇱", "flag Timor-Leste"), ("🇹🇲", "flag Turkmenistan"), ("🇹🇴", "flag Tonga"),
+        ("🇹🇹", "flag Trinidad and Tobago"), ("🇹🇻", "flag Tuvalu"), ("🇺🇬", "flag Uganda"), ("🇺🇲", "flag United States Minor Outlying Islands"),
+        ("🇻🇦", "flag Holy See (Vatican City State)"), ("🇻🇨", "flag Saint Vincent and the Grenadines"),
+        ("🇻🇬", "flag Virgin Islands, British"), ("🇻🇮", "flag Virgin Islands, U.S."), ("🇻🇺", "flag Vanuatu"),
+        ("🇼🇫", "flag Wallis and Futuna"), ("🇼🇸", "flag Samoa"), ("🇽🇰", "flag Kosovo"), ("🇾🇹", "flag Mayotte"),
+        ("🇿🇲", "flag Zambia"), ("🇿🇼", "flag Zimbabwe"), ("🏴󠁧󠁢󠁥󠁮󠁧󠁿", "flag England"), ("🏴󠁧󠁢󠁳󠁣󠁴󠁿", "flag Scotland"),
+        ("🏴󠁧󠁢󠁷󠁬󠁳󠁿", "flag Wales"),
     ],
 }
 
@@ -559,8 +652,8 @@ SKIN_TONE_EMOJIS = {
     "👶", "🧒", "👦", "👧", "🧑", "👱", "👨", "🧔", "👩", "🧓", "👴", "👵",
     "🙍", "🙎", "🙅", "🙆", "💁", "🙋", "🧏", "🤦", "🤷",
     "💆", "💇", "🚶", "🧍", "🧎", "🏃", "💃", "🕺",
-    "🚶\u200d➡️", "🧎\u200d➡️", "🏃\u200d➡️",
-    "🧑\u200d🦯\u200d➡️", "🧑\u200d🦼\u200d➡️", "🧑\u200d🦽\u200d➡️", "🧑\u200d🩰",
+    "🚶‍➡️", "🧎‍➡️", "🏃‍➡️",
+    "🧑‍🦯‍➡️", "🧑‍🦼‍➡️", "🧑‍🦽‍➡️", "🧑‍🩰",
     "🧖", "🧗", "🏋️", "🤸", "🤼", "🤽", "🤾", "🤹", "🧘",
     "👮", "🕵️", "💂", "🥷", "👷", "🫅", "🤴", "👸",
     "👳", "👲", "🧕", "🤵", "👰", "🤰", "🫄", "🤱", "👼",
@@ -568,17 +661,29 @@ SKIN_TONE_EMOJIS = {
     "🕴️", "👯", "🏂", "🏇",
     # Couples & pairs (single modifier applies to all persons)
     "🤝", "👫", "👬", "👭", "💏", "💑",
+    # Professions, sport and the rest, from filling out RGI coverage
+    "⛹️", "🏄", "🏊", "🏌️", "🙇", "🚣", "🚴", "🚵",
+    "🛀", "🛌", "🧑‍⚕️", "🧑‍⚖️", "🧑‍✈️", "🧑‍🌾", "🧑‍🍳", "🧑‍🍼",
+    "🧑‍🎄", "🧑‍🎓", "🧑‍🎤", "🧑‍🎨", "🧑‍🏫", "🧑‍🏭", "🧑‍💻", "🧑‍💼",
+    "🧑‍🔧", "🧑‍🔬", "🧑‍🚀", "🧑‍🚒", "🧑‍🦯", "🧑‍🦰", "🧑‍🦱", "🧑‍🦲",
+    "🧑‍🦳", "🧑‍🦼", "🧑‍🦽", "🫃",
 }
 
 # Emojis whose gendered forms swap the person instead of adding ♂/♀: the
 # accessibility sequences spell out 👨/👩 in place of 🧑
 GENDER_SWAP_PERSON = "🧑"
 GENDER_SWAP_EMOJIS = {
-    "🧑\u200d🦯\u200d➡️", "🧑\u200d🦼\u200d➡️", "🧑\u200d🦽\u200d➡️",
+    "🧑‍⚕️", "🧑‍⚖️", "🧑‍✈️", "🧑‍🌾", "🧑‍🍳", "🧑‍🍼",
+    "🧑‍🎓", "🧑‍🎤", "🧑‍🎨", "🧑‍🏫", "🧑‍🏭", "🧑‍💻",
+    "🧑‍💼", "🧑‍🔧", "🧑‍🔬", "🧑‍🚀", "🧑‍🚒", "🧑‍🦯",
+    "🧑‍🦰", "🧑‍🦱", "🧑‍🦲", "🧑‍🦳", "🧑‍🦼", "🧑‍🦽",
+    "🧑‍🦯‍➡️", "🧑‍🦼‍➡️", "🧑‍🦽‍➡️",
 }
 
 # Emojis that support gender ZWJ sequences (+ ZWJ + ♂/♀ + FE0F)
 GENDER_EMOJIS = {
+    # Bases whose ♂/♀ forms were unreachable until now
+    "⛹️", "🏄", "🏊", "🏌️", "👯", "👳", "🙇", "🚣", "🚴", "🚵", "🤼",
     # Gesturing & expressions
     "🙍", "🙎", "🙅", "🙆", "💁", "🙋", "🧏", "🤦", "🤷",
     # Body care
@@ -587,7 +692,7 @@ GENDER_EMOJIS = {
     "🚶", "🧍", "🧎", "🏃",
     # The facing-right ones from Emoji 15.1: ♂/♀ goes between the person and
     # the arrow, which _apply_modifiers() handles
-    "🚶\u200d➡️", "🧎\u200d➡️", "🏃\u200d➡️",
+    "🚶‍➡️", "🧎‍➡️", "🏃‍➡️",
     # Dance (💃/🕺 are already gendered, but 🧑 variants exist)
     # Activities & sports
     "🧖", "🧗", "🏋️", "🤸", "🤽", "🤾", "🤹", "🧘",

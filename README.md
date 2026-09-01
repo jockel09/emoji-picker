@@ -10,7 +10,7 @@ Built because the default KDE emoji picker can't directly insert emojis under Wa
 
 - 🖐🏻 draggable window to use the picker where you want
 - 📌 pin the position for the next time you open the picker
-- 🫪🍋‍🟩🙂‍↕️🫆🛘🫈 46 new Emojis
+- 🫪🍋‍🟩🙂‍↕️🫆🛘🫈 > 300 new Emojis
 
 
 ## Features
@@ -19,7 +19,8 @@ Built because the default KDE emoji picker can't directly insert emojis under Wa
 - ✅ **Auto-close** — closes after selecting an emoji
 - ✅ **Multi-insert** — hold `Shift` to collect several emojis and insert them in one go
 - ✅ **Categories** — Smileys, People, Animals, Food, Travel, Activities, Objects, Symbols, Flags
-- ✅ **Up to date** — 1440 emojis, current as of Emoji 17.0 (August 2025)
+- ✅ **Complete** — every RGI emoji of Emoji 17.0 (August 2025), 1752 entries plus
+  the skin tone and gender variants built from them
 - ✅ **Favorites** — right-click any emoji to add/remove as favorite
 - ✅ **Recently used** — automatically tracked
 - ✅ **Search** — with German and English terms (e.g. "auto", "car", "lachen", "laugh")
