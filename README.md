@@ -274,6 +274,9 @@ chmod +x uninstall.sh
 ./uninstall.sh
 ```
 
+Program files go without asking. Settings and the list of recently used emojis
+are asked about one at a time, so keeping one and dropping the other works.
+
 ## How it works
 
 The default KDE emoji picker (and most Linux emoji pickers) can only copy emojis to the clipboard under Wayland, because Wayland's security model doesn't allow apps to simulate keyboard input via the `zwp_virtual_keyboard_v1` protocol (KWin doesn't support it).
