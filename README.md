@@ -128,10 +128,11 @@ Set up a global shortcut in KDE:
 
 | Key | Action |
 |---|---|
+| `Enter` (search field) | Insert the first emoji shown, no `Tab` needed. It is outlined in the accent color |
 | `Tab` | Jump from search field to emoji grid |
 | `Arrow keys` | Navigate within the emoji grid |
 | `Enter` / `Space` | Insert the focused emoji |
-| `Shift+Enter` | Collect the focused emoji; releasing `Shift` inserts the collection |
+| `Shift+Enter` | Collect the emoji instead; releasing `Shift` inserts the collection |
 | `F` | Toggle favorite on focused emoji |
 | `Del` | Remove focused emoji from Recents or Favorites |
 | `Ctrl+←` / `Ctrl+→` | Switch category (also works in empty search field) |

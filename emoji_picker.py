@@ -948,6 +948,7 @@ class EmojiButton(QToolButton):
         super().__init__(parent)
         self.emoji = emoji
         self.emoji_name = name
+        self._preselected = False
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setToolTip(f"{emoji}  {name}" if kaomoji else name)
 
@@ -971,26 +972,41 @@ class EmojiButton(QToolButton):
             self.setIcon(QIcon(pixmap))
             self.setIconSize(QSize(32, 32))
 
-        self.setStyleSheet("""
-            QToolButton {
-                border: 1px solid transparent;
+        self._refresh_style()
+        self.clicked.connect(lambda: self.emoji_selected.emit(self.emoji))
+
+    def set_preselected(self, on):
+        """Mark this button as the one Enter in the search field would insert."""
+        if on == self._preselected:
+            return
+        self._preselected = on
+        self._refresh_style()
+
+    def _refresh_style(self):
+        """The accent border says "Enter takes this one", the white border of
+        :focus says "the keyboard is here". Both can sit on the same button,
+        and then focus wins, which is right: Enter follows the focus."""
+        bg = accent_rgba(0.18) if self._preselected else "transparent"
+        border = accent_hex() if self._preselected else "transparent"
+        self.setStyleSheet(f"""
+            QToolButton {{
+                border: 1px solid {border};
                 border-radius: 6px;
-                background: transparent;
+                background: {bg};
                 padding: 0px;
-            }
-            QToolButton:hover {
+            }}
+            QToolButton:hover {{
                 background: rgba(255, 255, 255, 0.08);
                 border: 1px solid rgba(255, 255, 255, 0.12);
-            }
-            QToolButton:pressed {
+            }}
+            QToolButton:pressed {{
                 background: rgba(255, 255, 255, 0.15);
-            }
-            QToolButton:focus {
+            }}
+            QToolButton:focus {{
                 background: rgba(255, 255, 255, 0.10);
                 border: 1px solid rgba(255, 255, 255, 0.35);
-            }
+            }}
         """)
-        self.clicked.connect(lambda: self.emoji_selected.emit(self.emoji))
 
     def keyPressEvent(self, event):
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
@@ -1149,6 +1165,11 @@ class EmojiGrid(QWidget):
                     self._focus_and_scroll(self.buttons[new_idx])
                 return True
         return super().eventFilter(obj, event)
+
+    def set_preselected(self, idx):
+        """Mark the button at idx as the Enter target, or none when idx is None."""
+        for i, btn in enumerate(self.buttons):
+            btn.set_preselected(idx is not None and i == idx)
 
     def focus_button(self, idx):
         """Set focus to button at idx, clamped to valid range."""
@@ -1438,6 +1459,9 @@ class EmojiPicker(QWidget):
         QShortcut(QKeySequence("Escape"), self, self.close)
         QShortcut(QKeySequence("Ctrl+F"), self, lambda: self.search.setFocus())
 
+        # Every move of the keyboard can change which emoji Enter would take
+        QApplication.instance().focusChanged.connect(self._on_focus_changed)
+
     def center_on_screen(self):
         screen = QApplication.primaryScreen()
         if screen:
@@ -1661,6 +1685,23 @@ class EmojiPicker(QWidget):
         self._base_status = self.status.text()
         self._show_collect_status()
         self.scroll.verticalScrollBar().setValue(0)
+        self._update_preselect()
+
+    def _on_focus_changed(self, old, new):
+        self._update_preselect()
+
+    def _update_preselect(self):
+        """Mark what Enter would insert while the keyboard is off the grid.
+
+        Once focus sits on a button, that button is what Enter takes and it
+        wears the focus ring already, so a second mark would only be in the
+        way. Asked of the window rather than of the search field, because
+        hasFocus() goes false whenever the window isn't the active one, and
+        the mark would then come and go with the window instead of with the
+        keyboard.
+        """
+        on_button = isinstance(self.focusWidget(), EmojiButton)
+        self.emoji_grid.set_preselected(None if on_button else 0)
 
     def on_search(self, text):
         """Debounced search — waits 150ms after last keystroke."""
@@ -1724,6 +1765,7 @@ class EmojiPicker(QWidget):
         self._base_status = self.status.text()
         self._show_collect_status()
         self.scroll.verticalScrollBar().setValue(0)
+        self._update_preselect()
 
     def on_emoji_selected(self, emoji):
         # Add to recent
@@ -1866,6 +1908,17 @@ class EmojiPicker(QWidget):
             if event.key() == Qt.Key.Key_Backspace and not self.search.text():
                 if self._undo_collected():
                     return True
+            # Enter inserts the first emoji, so the obvious pick costs no trip
+            # through Tab. A search still owed from the debounce is run first,
+            # otherwise fast typing inserts what the keystroke before found.
+            if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                if self._search_timer.isActive():
+                    self._search_timer.stop()
+                    self._do_search()
+                if self.emoji_grid.buttons:
+                    self.emoji_grid.buttons[0].click()
+                return True
+
         return super().eventFilter(obj, event)
 
     def on_move_favorite(self, emoji, direction):
