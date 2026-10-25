@@ -308,6 +308,48 @@ def save_recent(recent):
     with open(RECENT_FILE, "w") as f:
         json.dump(recent, f, ensure_ascii=False)
 
+WORD_SPLIT = re.compile(r"[^\w]+", re.UNICODE)
+
+
+def match_rank(query, name, tags):
+    """How well a candidate answers the query — lower sorts first.
+
+    The first number is how the query matched: 0 it is the whole name, 1 it is
+    one of the tags, 2 the name starts with it, 3 a word of the name does,
+    4 the name holds it somewhere, 5 a tag holds it somewhere. None when
+    nothing matched at all.
+
+    Plain substring matching answers "h" with "watch", "shark" and "sheep"
+    long before "heart", because what's left to sort by is the standard order,
+    which is Unicode order and means nothing to the person typing.
+
+    A whole tag ranks that high because the names are English only. A German
+    query reaches its emoji through the tags or not at all, and would sit
+    behind every English name that happens to contain the same letters:
+    "herz" would answer with the flag of Bosnia & Herzegovina.
+
+    The second number is where the matching tag sits in its list, which is
+    written central meaning first. "herz" is the first tag of ❤️ and the last
+    of 😘, and that is the difference between the two for someone typing it.
+    """
+    n = name.lower()
+    lower_tags = [tag.lower() for tag in tags]
+    if n == query:
+        return (0, 0)
+    if query in lower_tags:
+        return (1, lower_tags.index(query))
+    if n.startswith(query):
+        return (2, 0)
+    if any(w.startswith(query) for w in WORD_SPLIT.split(n) if w):
+        return (3, 0)
+    if query in n:
+        return (4, 0)
+    for i, tag in enumerate(lower_tags):
+        if query in tag:
+            return (5, i)
+    return None
+
+
 SKIN_TONE_MODIFIERS = [
     ("", "#FBBF24"),
     ("\U0001F3FB", "#FDDBB4"),
@@ -1640,30 +1682,41 @@ class EmojiPicker(QWidget):
         for btn in self.category_buttons.values():
             btn.setChecked(False)
 
-        results = []
+        ranked = []
         seen = set()
         for category_emojis in EMOJI_CATEGORIES.values():
             for emoji, name in category_emojis:
                 if emoji in seen:
                     continue
-                # Search in name
-                if text in name.lower():
-                    results.append((emoji, name))
-                    seen.add(emoji)
+                rank = match_rank(text, name, SEARCH_TAGS.get(emoji, []))
+                if rank is None:
                     continue
-                # Search in tags
-                tags = SEARCH_TAGS.get(emoji, [])
-                if any(text in tag.lower() for tag in tags):
-                    results.append((emoji, name))
-                    seen.add(emoji)
+                ranked.append((rank, emoji, name))
+                seen.add(emoji)
 
-        # Also search kaomoji
+        # Sorting on the rank alone, and sorting stably, leaves matches of
+        # equal rank in the standard order they were collected in. Which beats
+        # a criterion nobody typed: the position of a result has to follow
+        # from the query, or it can't be learned.
+        ranked.sort(key=lambda r: r[0])
+        results = [(emoji, name) for _, emoji, name in ranked]
+
+        # Kaomoji stay behind the emojis and are ranked among themselves. A
+        # text face is a different kind of answer, and Enter shouldn't hand one
+        # over just because its name happens to start with the query.
         if self.config.get("kaomoji", True):
+            kaomoji = []
             for k in load_kaomoji():
                 txt, name = k["text"], k["name"]
-                if txt not in seen and text in name.lower():
-                    results.append((txt, name))
-                    seen.add(txt)
+                if txt in seen:
+                    continue
+                rank = match_rank(text, name, [])
+                if rank is None:
+                    continue
+                kaomoji.append((rank, txt, name))
+                seen.add(txt)
+            kaomoji.sort(key=lambda r: r[0])
+            results.extend((txt, name) for _, txt, name in kaomoji)
 
         self.emoji_grid.set_emojis(self._apply_modifiers(results), kaomoji_set=self._kaomoji_set())
         key = "status_results_plural" if len(results) != 1 else "status_results"

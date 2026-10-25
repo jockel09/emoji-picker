@@ -151,6 +151,12 @@ Set up a global shortcut in KDE:
 | `pizza` | 🍕 |
 | `katze` / `cat` | 🐱 🐈 😺 ... |
 
+Matches are ordered by how well they answer what you typed: the whole name
+first, then an exact tag, then names starting with it, then names with it at a
+word start, then anywhere in the name, and tag matches last. So `cat` answers
+with 🐈 rather than with 😹, and `h` doesn't bury 😍 under 🌭 and 🦈. Equally
+good matches keep the standard order, so a result stays where you last saw it.
+
 ## Configuration
 
 Settings are stored in `~/.config/emoji-picker/config.json`:
