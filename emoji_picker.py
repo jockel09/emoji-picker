@@ -1325,6 +1325,13 @@ class EmojiPicker(QWidget):
                 border: none;
                 background: transparent;
             }
+            /* Without a dark Qt palette (e.g. non-KDE Wayland compositors) the
+               scroll viewport paints the light platform palette behind the
+               dark #container. Keep the viewport and its children transparent
+               so the container's dark background shows through. */
+            QScrollArea > QWidget > QWidget {
+                background: transparent;
+            }
             QScrollBar:vertical {
                 background: transparent;
                 width: 6px;
